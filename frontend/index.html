@@ -24,7 +24,7 @@
         <a id="login-btn" class="scan-btn login-btn" href="/api/login">Connect Zerodha</a>
         <span class="stat"><em>Last update</em> <strong id="last-update">--:--:--</strong></span>
         <span class="stat"><em>Stocks scanned</em> <strong id="stocks-scanned">0</strong></span>
-        <span class="stat"><em>Opportunities</em> <strong id="opp-count">0</strong></span>
+        <span class="stat"><em>Priced</em> <strong id="opp-count">0</strong></span>
       </div>
     </header>
 
@@ -66,19 +66,12 @@
       <table class="results">
         <thead>
           <tr>
-            <th>Rank</th>
             <th>Stock</th>
-            <th>Expiry</th>
-            <th class="num">Strike</th>
             <th class="num">Spot</th>
-            <th class="num">CE</th>
-            <th class="num">PE</th>
-            <th class="num">Profit</th>
-            <th class="num">Return</th>
-            <th class="num">Net</th>
-            <th class="num">Capital</th>
-            <th class="num">Lot profit</th>
-            <th>Liquidity</th>
+            <th class="num">Future</th>
+            <th>Fut expiry</th>
+            <th class="num">Basis</th>
+            <th class="num">Basis %</th>
           </tr>
         </thead>
         <tbody id="results-body"></tbody>
@@ -87,8 +80,7 @@
     </main>
 
     <p class="footnote">
-      Execution uses CE bid / PE ask (or the reverse). LTP is informational only.
-      Charges are estimates. Nothing is sent to the exchange.
+      First check: cash stock vs nearest future, using last traded price if the book is empty.
     </p>
   </div>
 

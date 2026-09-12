@@ -77,25 +77,17 @@ function setPill(connected) {
 
 function render(snapshot) {
   state.snapshot = snapshot;
-  state.rows = snapshot.opportunities || [];
-  state.expiries = snapshot.expiries || [];
-  state.nearest = snapshot.nearest_expiry;
-  state.next = snapshot.next_expiry;
   state.connected = Boolean(snapshot.connected);
   setPill(state.connected);
 
-  const shown = visibleRows(state.rows);
+  const rows = snapshot.underlyings || [];
   document.getElementById("last-update").textContent = snapshot.last_update || "--:--:--";
-  document.getElementById("stocks-scanned").textContent = snapshot.stocks_scanned || 0;
-  document.getElementById("opp-count").textContent = shown.length;
+  document.getElementById("stocks-scanned").textContent = snapshot.stocks_scanned || rows.length || 0;
+  document.getElementById("opp-count").textContent = `${snapshot.spots_priced || 0} spot / ${snapshot.futures_priced || 0} fut`;
 
   const bar = document.getElementById("alert-bar");
   const notice = snapshot.message || snapshot.error;
-  const alerts = shown.filter((row) => row.alert);
-  if (alerts.length) {
-    bar.classList.remove("hidden");
-    bar.textContent = alerts.map((row) => `${row.symbol} — ${pct(row.net_return)} parity opportunity`).join("   ·   ");
-  } else if (notice) {
+  if (notice) {
     bar.classList.remove("hidden");
     bar.textContent = notice;
   } else {
@@ -105,52 +97,25 @@ function render(snapshot) {
   const body = document.getElementById("results-body");
   const empty = document.getElementById("empty-state");
   body.innerHTML = "";
-  if (!shown.length) {
+  if (!rows.length) {
     empty.classList.remove("hidden");
     empty.textContent = state.connected
-      ? (snapshot.message || "No live bid/ask opportunities right now.")
-      : "Connect Zerodha to load live books.";
+      ? (snapshot.message || "No stock/future prices returned.")
+      : "Connect Zerodha to load live prices.";
     return;
   }
   empty.classList.add("hidden");
 
-  for (const row of shown) {
+  for (const row of rows) {
     const tr = document.createElement("tr");
-    tr.dataset.id = row.id;
-    tr.setAttribute("role", "button");
-    tr.tabIndex = 0;
-    const ceSide = row.used_ltp ? "ltp" : row.strategy === "A" ? "bid" : "ask";
-    const peSide = row.used_ltp ? "ltp" : row.strategy === "A" ? "ask" : "bid";
     tr.innerHTML = `
-      <td class="rank rank-${row.liquidity}">${row.rank}</td>
-      <td>
-        <div class="stock-cell">
-          <strong>${row.symbol}</strong>
-          <span class="stock-meta">${row.strategy === "A" ? "Buy stock / sell CE / buy PE" : "Sell stock / buy CE / sell PE"}</span>
-          ${row.used_ltp ? `<span class="warn">LTP estimate — not executable</span>` : ""}
-          ${row.partial ? `<span class="warn">Partial liquidity · ${inr(row.executable_qty, 0)} / ${inr(row.lot_size, 0)}</span>` : ""}
-        </div>
-      </td>
-      <td>${fmtExpiry(row.expiry)}</td>
-      <td class="num">${inr(row.strike, 0)}</td>
-      <td class="num">${inr(row.spot)}</td>
-      <td class="num">${inr(row.ce_px)}<span class="px-note">${ceSide}</span></td>
-      <td class="num">${inr(row.pe_px)}<span class="px-note">${peSide}</span></td>
-      <td class="num">${money(row.profit_per_share)}</td>
-      <td class="num ${row.gross_return >= 1 ? "ret-strong" : ""}">${pct(row.gross_return)}</td>
-      <td class="num">${pct(row.net_return)}</td>
-      <td class="num">${capitalFmt(row.capital)}</td>
-      <td class="num">${money(row.lot_profit)}</td>
-      <td class="liq liq-${row.liquidity}">${row.liquidity}</td>
+      <td><strong>${row.symbol}</strong></td>
+      <td class="num">${row.spot ? money(row.spot) : "—"}</td>
+      <td class="num">${row.future ? money(row.future) : "—"}</td>
+      <td>${row.expiry ? fmtExpiry(row.expiry) : "—"}</td>
+      <td class="num">${row.spot && row.future ? money(row.basis) : "—"}</td>
+      <td class="num">${row.spot && row.future ? pct(row.basis_pct) : "—"}</td>
     `;
-    const open = () => openDrawer(row);
-    tr.addEventListener("click", open);
-    tr.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        open();
-      }
-    });
     body.appendChild(tr);
   }
 }
