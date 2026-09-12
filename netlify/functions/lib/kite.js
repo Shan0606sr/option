@@ -277,6 +277,59 @@ async function historicalCloses(accessToken, tokens) {
   return { closes, error };
 }
 
+async function historicalDayCloses(accessToken, token) {
+  const path = `/instruments/historical/${token}/day?from=${istYmd(21)}&to=${istYmd(0)}`;
+  const res = await kiteGet(path, accessToken);
+  const json = await res.json();
+  const candles = (json.data && json.data.candles) || [];
+  return candles.map((candle) => Number(candle[4]) || 0).filter((n) => n > 0);
+}
+
+async function fetchNifty(accessToken) {
+  const NIFTY_TOKEN = 256265;
+  let live = 0;
+  let previousClose = 0;
+  let source = "";
+  let error = "";
+
+  try {
+    const res = await kiteGet("/quote?i=NSE:NIFTY%2050", accessToken);
+    const json = await res.json();
+    const data = json.data || {};
+    const quote = data["NSE:NIFTY 50"] || data["NSE:NIFTY50"] || Object.values(data)[0] || {};
+    live = Number(quote.last_price || 0);
+    previousClose = Number((quote.ohlc || {}).close || 0);
+    source = "quote";
+  } catch (err) {
+    error = err.message;
+  }
+
+  if (!live || !previousClose) {
+    try {
+      const closes = await historicalDayCloses(accessToken, NIFTY_TOKEN);
+      if (closes.length) {
+        if (!live) live = closes[closes.length - 1];
+        if (!previousClose) previousClose = closes.length > 1 ? closes[closes.length - 2] : closes[closes.length - 1];
+        source = source ? `${source}+historical` : "historical";
+        if (closes.length) error = "";
+      }
+    } catch (err) {
+      if (!live) error = err.message;
+    }
+  }
+
+  const change = live && previousClose ? live - previousClose : 0;
+  return {
+    symbol: "NIFTY 50",
+    live,
+    previous_close: previousClose,
+    change,
+    change_pct: previousClose ? (change / previousClose) * 100 : 0,
+    source,
+    error,
+  };
+}
+
 function isIndex(name) {
   return INDEX_NAMES.has(String(name || "").toUpperCase());
 }
@@ -320,6 +373,7 @@ module.exports = {
   exchangeRequestToken,
   loadInstruments,
   quoteMany,
+  fetchNifty,
   historicalCloses,
   yahooLast,
   yahooFutSymbol,

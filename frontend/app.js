@@ -3,12 +3,14 @@ const LIQUIDITY_FLOOR = { ALL: 3, MEDIUM: 1, HIGH: 0 };
 
 const state = {
   expiry: "nearest",
+  tab: "index",
   rows: [],
   expiries: [],
   nearest: null,
   next: null,
   connected: false,
   snapshot: null,
+  scanned: false,
 };
 
 function inr(n, digits = 2) {
@@ -275,6 +277,69 @@ async function runScan() {
   }
 }
 
+function renderNifty(data) {
+  state.connected = Boolean(data.connected);
+  setPill(state.connected, Boolean(data.error && /PermissionException|Insufficient permission/i.test(data.error)));
+  if (data.last_update) document.getElementById("last-update").textContent = data.last_update;
+
+  const liveEl = document.getElementById("nifty-live");
+  const prevEl = document.getElementById("nifty-prev");
+  const chEl = document.getElementById("nifty-change");
+  liveEl.textContent = data.live ? inr(data.live) : "—";
+  prevEl.textContent = data.previous_close ? inr(data.previous_close) : "—";
+  if (data.live && data.previous_close) {
+    const sign = data.change > 0 ? "+" : "";
+    chEl.textContent = `${sign}${inr(data.change)} (${sign}${Number(data.change_pct).toFixed(2)}%)`;
+    chEl.className = data.change >= 0 ? "up" : "down";
+  } else {
+    chEl.textContent = "—";
+    chEl.className = "";
+  }
+
+  const bits = [];
+  if (data.source) bits.push(`via ${data.source}`);
+  if (data.market_open === false) bits.push("market closed — last session price");
+  if (data.api_key_tail) bits.push(`Netlify key …${data.api_key_tail}`);
+  if (data.live || data.previous_close) {
+    bits.push("Zerodha price received");
+  } else {
+    bits.push(data.error || "No Nifty price yet");
+  }
+  document.getElementById("nifty-meta").textContent = bits.join(" · ");
+
+  const bar = document.getElementById("alert-bar");
+  if (!(data.live || data.previous_close) && (data.error || data.message)) {
+    bar.classList.remove("hidden");
+    bar.textContent = data.error || data.message;
+  } else if (state.tab === "index") {
+    bar.classList.add("hidden");
+  }
+}
+
+async function loadNifty() {
+  const btn = document.getElementById("nifty-btn");
+  btn.disabled = true;
+  btn.textContent = "Loading…";
+  try {
+    const data = await fetchJson("/api/nifty");
+    renderNifty(data);
+  } catch (error) {
+    renderNifty({ connected: state.connected, error: error.message, live: 0, previous_close: 0 });
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Refresh Nifty";
+  }
+}
+
+function showTab(tab) {
+  state.tab = tab;
+  document.querySelectorAll(".page-tab").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.tab === tab);
+  });
+  document.getElementById("panel-index").hidden = tab !== "index";
+  document.getElementById("panel-stocks").hidden = tab !== "stocks";
+}
+
 async function consumeKiteRedirect() {
   const params = new URLSearchParams(window.location.search);
   if (params.get("request_token")) {
@@ -293,14 +358,15 @@ async function boot() {
   await consumeKiteRedirect();
   const status = await fetchJson("/api/status").catch(() => ({ connected: false }));
   setPill(Boolean(status.connected));
+  showTab("index");
   if (status.connected) {
-    await runScan();
+    await loadNifty();
   } else {
-    render({
+    renderNifty({
       connected: false,
-      opportunities: [],
-      stocks_scanned: 0,
-      error: "Connect Zerodha to load live NSE bid/ask. This cannot run from dummy data.",
+      error: "Connect Zerodha to test Nifty live price.",
+      live: 0,
+      previous_close: 0,
     });
   }
 }
@@ -320,7 +386,27 @@ document.querySelectorAll("[data-expiry]").forEach((btn) => {
   });
 });
 
-document.getElementById("scan-btn").addEventListener("click", runScan);
+document.querySelectorAll(".page-tab").forEach((btn) => {
+  btn.addEventListener("click", async () => {
+    showTab(btn.dataset.tab);
+    if (btn.dataset.tab === "index") {
+      if (state.connected) await loadNifty();
+      return;
+    }
+    if (state.connected && !state.scanned) {
+      state.scanned = true;
+      await runScan();
+    } else if (state.snapshot) {
+      render(state.snapshot);
+    }
+  });
+});
+
+document.getElementById("nifty-btn").addEventListener("click", loadNifty);
+document.getElementById("scan-btn").addEventListener("click", () => {
+  state.scanned = true;
+  runScan();
+});
 document.getElementById("drawer-close").addEventListener("click", closeDrawer);
 document.getElementById("backdrop").addEventListener("click", closeDrawer);
 document.addEventListener("keydown", (event) => {
@@ -329,6 +415,10 @@ document.addEventListener("keydown", (event) => {
 
 window.setInterval(() => {
   if (!state.connected || document.visibilityState !== "visible") return;
+  if (state.tab === "index") {
+    if (!document.getElementById("nifty-btn").disabled) loadNifty();
+    return;
+  }
   if (document.getElementById("scan-btn").disabled) return;
   runScan();
 }, 120000);

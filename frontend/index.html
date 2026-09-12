@@ -30,6 +30,37 @@
 
     <div id="alert-bar" class="alert-bar hidden" role="status"></div>
 
+    <nav class="page-tabs" role="tablist">
+      <button type="button" class="page-tab active" data-tab="index">Index price</button>
+      <button type="button" class="page-tab" data-tab="stocks">Cash vs Future</button>
+    </nav>
+
+    <section id="panel-index" class="index-panel">
+      <div class="index-toolbar">
+        <div>
+          <h2>NIFTY 50</h2>
+          <p class="index-sub">Single Zerodha quote test — live LTP and previous close</p>
+        </div>
+        <button id="nifty-btn" type="button" class="scan-btn">Refresh Nifty</button>
+      </div>
+      <div class="index-cards">
+        <article class="index-card">
+          <span>Nifty live price</span>
+          <strong id="nifty-live">—</strong>
+        </article>
+        <article class="index-card">
+          <span>Nifty previous day close</span>
+          <strong id="nifty-prev">—</strong>
+        </article>
+        <article class="index-card">
+          <span>Change</span>
+          <strong id="nifty-change">—</strong>
+        </article>
+      </div>
+      <p id="nifty-meta" class="index-meta">Connect Zerodha, then refresh.</p>
+    </section>
+
+    <section id="panel-stocks" hidden>
     <section class="controls">
       <div class="control">
         <span class="label">Expiry</span>
@@ -82,6 +113,7 @@
     <p class="footnote">
       First check: cash stock vs nearest future. Live LTP if the API key allows quotes; otherwise last daily close.
     </p>
+    </section>
   </div>
 
   <aside id="drawer" class="drawer" hidden>
