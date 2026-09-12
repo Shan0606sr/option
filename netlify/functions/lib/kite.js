@@ -345,6 +345,17 @@ function accessCookie(token) {
   ].join("; ");
 }
 
+function clearAccessCookie() {
+  return [
+    "kite_access=",
+    "Path=/",
+    "HttpOnly",
+    "Secure",
+    "SameSite=Lax",
+    "Max-Age=0",
+  ].join("; ");
+}
+
 function readAccessCookie(cookieHeader) {
   if (!cookieHeader) return "";
   const match = cookieHeader.match(/(?:^|;\s*)kite_access=([^;]+)/);
@@ -381,6 +392,7 @@ module.exports = {
   lookupQuote,
   isIndex,
   accessCookie,
+  clearAccessCookie,
   readAccessCookie,
   marketOpen,
 };

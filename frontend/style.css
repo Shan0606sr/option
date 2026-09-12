@@ -281,6 +281,14 @@ a.login-btn {
   padding: 7px 12px;
 }
 
+button.logout-btn {
+  margin-left: 0;
+  padding: 7px 12px;
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+
 .table-wrap { overflow: auto; border: 1px solid var(--line); }
 
 .results {

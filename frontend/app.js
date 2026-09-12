@@ -66,6 +66,8 @@ function visibleRows(rows) {
 function setPill(connected, needReconnect) {
   const pill = document.getElementById("conn-pill");
   const login = document.getElementById("login-btn");
+  const logout = document.getElementById("logout-btn");
+  logout.hidden = !connected;
   if (connected && needReconnect) {
     pill.textContent = "Connected — reconnect for quotes";
     pill.className = "pill pill-dummy";
@@ -402,6 +404,33 @@ document.querySelectorAll(".page-tab").forEach((btn) => {
   });
 });
 
+async function logoutZerodha() {
+  priceFillId += 1;
+  await fetchJson("/api/logout", { method: "POST" });
+  state.connected = false;
+  state.snapshot = null;
+  state.scanned = false;
+  setPill(false);
+  document.getElementById("stocks-scanned").textContent = "0";
+  document.getElementById("opp-count").textContent = "0";
+  document.getElementById("last-update").textContent = "--:--:--";
+  renderNifty({
+    connected: false,
+    live: 0,
+    previous_close: 0,
+    error: "Logged out. Connect Zerodha again to authorize the current Netlify API key.",
+  });
+  if (state.tab === "stocks") {
+    render({
+      connected: false,
+      opportunities: [],
+      stocks_scanned: 0,
+      error: "Logged out. Connect Zerodha again.",
+    });
+  }
+}
+
+document.getElementById("logout-btn").addEventListener("click", logoutZerodha);
 document.getElementById("nifty-btn").addEventListener("click", loadNifty);
 document.getElementById("scan-btn").addEventListener("click", () => {
   state.scanned = true;
