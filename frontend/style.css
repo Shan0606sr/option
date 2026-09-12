@@ -187,6 +187,13 @@ select { width: 140px; }
 
 .scan-btn:disabled { opacity: 0.55; cursor: wait; }
 
+a.login-btn {
+  display: inline-block;
+  text-decoration: none;
+  margin-left: 0;
+  padding: 7px 12px;
+}
+
 .table-wrap { overflow: auto; border: 1px solid var(--line); }
 
 .results {
