@@ -183,7 +183,60 @@ async function fetchJson(url, options) {
   return data;
 }
 
+function recountPrices(rows) {
+  return {
+    spots_priced: rows.filter((row) => row.spot > 0).length,
+    futures_priced: rows.filter((row) => row.future > 0).length,
+  };
+}
+
+function applyCloses(rows, closes) {
+  for (const row of rows) {
+    if (!row.spot && closes[String(row.spot_token)]) row.spot = closes[String(row.spot_token)];
+    if (!row.future && closes[String(row.fut_token)]) row.future = closes[String(row.fut_token)];
+    row.basis = row.future && row.spot ? row.future - row.spot : 0;
+    row.basis_pct = row.spot ? (row.basis / row.spot) * 100 : 0;
+  }
+}
+
+let priceFillId = 0;
+
+async function fillMissingPrices(snapshot) {
+  const rows = snapshot.underlyings || [];
+  const tokens = [];
+  for (const row of rows) {
+    if (!row.spot && row.spot_token) tokens.push(String(row.spot_token));
+    if (!row.future && row.fut_token) tokens.push(String(row.fut_token));
+  }
+  if (!tokens.length) return;
+
+  const id = ++priceFillId;
+  const unique = [...new Set(tokens)];
+  const chunk = 12;
+  for (let i = 0; i < unique.length; i += chunk) {
+    if (id !== priceFillId) return;
+    const slice = unique.slice(i, i + chunk);
+    const data = await fetchJson(`/api/prices?tokens=${encodeURIComponent(slice.join(","))}`);
+    if (id !== priceFillId) return;
+    applyCloses(rows, data.closes || {});
+    const counts = recountPrices(rows);
+    const done = Math.min(i + chunk, unique.length);
+    render({
+      ...snapshot,
+      ...counts,
+      underlyings: rows,
+      price_source: "historical",
+      message: counts.spots_priced || counts.futures_priced
+        ? `Last daily close: ${counts.spots_priced} stocks, ${counts.futures_priced} futures (${done}/${unique.length} tokens). Weekend close is fine.`
+        : (data.error || "Historical closes also failed. This Kite app may not include market data."),
+      error: counts.spots_priced || counts.futures_priced ? "" : (data.error || snapshot.error),
+    });
+    if (data.error && !(counts.spots_priced || counts.futures_priced)) return;
+  }
+}
+
 async function runScan() {
+  priceFillId += 1;
   const btn = document.getElementById("scan-btn");
   btn.disabled = true;
   btn.textContent = "Scanning…";
@@ -195,6 +248,8 @@ async function runScan() {
     });
     const snapshot = await fetchJson(`/api/scan?${params}`);
     render(snapshot);
+    btn.textContent = "Loading prices…";
+    await fillMissingPrices(snapshot);
   } catch (error) {
     render({
       connected: state.connected,

@@ -211,13 +211,27 @@ async function historicalClose(accessToken, token) {
   return Number(candles[candles.length - 1][4]) || 0;
 }
 
+const closeCache = { day: "", closes: {} };
+
 async function historicalCloses(accessToken, tokens) {
+  const day = istYmd(0);
+  if (closeCache.day !== day) {
+    closeCache.day = day;
+    closeCache.closes = {};
+  }
   const closes = {};
   let error = "";
   const unique = [...new Set(tokens.filter(Boolean).map(String))];
-  const chunk = 8;
-  for (let i = 0; i < unique.length; i += chunk) {
-    const slice = unique.slice(i, i + chunk);
+  const missing = unique.filter((token) => {
+    if (closeCache.closes[token]) {
+      closes[token] = closeCache.closes[token];
+      return false;
+    }
+    return true;
+  });
+  const chunk = 3;
+  for (let i = 0; i < missing.length; i += chunk) {
+    const slice = missing.slice(i, i + chunk);
     const results = await Promise.all(slice.map(async (token) => {
       try {
         return [token, await historicalClose(accessToken, token)];
@@ -227,7 +241,10 @@ async function historicalCloses(accessToken, tokens) {
       }
     }));
     for (const [token, close] of results) {
-      if (close) closes[token] = close;
+      if (close) {
+        closes[token] = close;
+        closeCache.closes[token] = close;
+      }
     }
     if (error && Object.keys(closes).length === 0) break;
   }
