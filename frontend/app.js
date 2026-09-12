@@ -401,9 +401,28 @@ function bookLtp(books, closes, key, token) {
 function finishPlan1Row(row) {
   row.synthetic = row.strike && row.ce ? row.strike + row.ce - (row.pe || 0) : 0;
   row.edge = row.spot && row.synthetic ? row.synthetic - row.spot : 0;
-  row.edge_pct = row.spot ? (row.edge / row.spot) * 100 : 0;
-  row.hit = Boolean(row.spot && row.synthetic && row.synthetic > row.spot);
+  row.edge_pct = row.spot && row.synthetic ? (row.edge / row.spot) * 100 : 0;
+  if (row.spot && row.synthetic) {
+    row.side = row.edge > 0 ? "positive" : row.edge < 0 ? "negative" : "flat";
+  } else {
+    row.side = "";
+  }
+  row.hit = row.side === "positive";
   return row;
+}
+
+function fillPlan1StockSelect(stocks, selected) {
+  const select = document.getElementById("plan1-stock");
+  const current = selected || select.value;
+  select.innerHTML = `<option value="">Select F&amp;O stock</option>`;
+  for (const stock of stocks || []) {
+    const symbol = stock.symbol || stock;
+    const opt = document.createElement("option");
+    opt.value = symbol;
+    opt.textContent = symbol;
+    if (symbol === current) opt.selected = true;
+    select.appendChild(opt);
+  }
 }
 
 function renderPlan1(snapshot) {
@@ -411,11 +430,13 @@ function renderPlan1(snapshot) {
   state.connected = Boolean(snapshot.connected);
   setPill(state.connected);
   if (snapshot.last_update) document.getElementById("last-update").textContent = snapshot.last_update;
+  fillPlan1StockSelect(snapshot.stocks, snapshot.symbol);
   const rows = snapshot.rows || [];
-  const priced = rows.filter((row) => row.ce > 0 && row.pe > 0).length;
-  const hits = rows.filter((row) => row.hit).length;
-  document.getElementById("stocks-scanned").textContent = snapshot.stocks_scanned || rows.length || 0;
-  document.getElementById("opp-count").textContent = `${hits} hits / ${priced} priced`;
+  const priced = rows.filter((row) => row.ce > 0).length;
+  const pos = rows.filter((row) => row.side === "positive").length;
+  const neg = rows.filter((row) => row.side === "negative").length;
+  document.getElementById("stocks-scanned").textContent = (snapshot.stocks || []).length || snapshot.stocks_scanned || 0;
+  document.getElementById("opp-count").textContent = `${pos} + / ${neg} −`;
 
   const bar = document.getElementById("alert-bar");
   const notice = snapshot.message || snapshot.error;
@@ -426,33 +447,36 @@ function renderPlan1(snapshot) {
     bar.classList.add("hidden");
   }
 
-  const hitsOnly = document.getElementById("plan1-hits-only").checked;
-  const visible = rows.filter((row) => !hitsOnly || row.hit);
   const body = document.getElementById("plan1-body");
   const empty = document.getElementById("plan1-empty");
   body.innerHTML = "";
-  if (!visible.length) {
+  if (!rows.length) {
     empty.classList.remove("hidden");
     empty.textContent = state.connected
-      ? (hitsOnly ? "No row where LTP is below strike + CE − PE yet." : (snapshot.message || "No Option plan 1 rows."))
-      : "Connect Zerodha, then scan Option plan 1.";
+      ? (snapshot.message || "Select a stock to load every strike.")
+      : "Connect Zerodha, then select a stock.";
     return;
   }
   empty.classList.add("hidden");
 
-  for (const row of visible) {
-    const ready = row.spot && row.ce && row.pe;
+  for (const row of rows) {
+    const ready = row.spot && row.ce;
     const tr = document.createElement("tr");
-    if (row.hit) tr.className = "hit";
+    if (row.side === "positive") tr.className = "hit";
+    if (row.side === "negative") tr.className = "miss";
+    const pctText = ready
+      ? `${row.edge_pct > 0 ? "+" : ""}${Number(row.edge_pct).toFixed(2)}% ${row.side === "negative" ? "loss" : row.side === "positive" ? "return" : ""}`
+      : "—";
+    const sideText = row.side === "positive" ? "Positive" : row.side === "negative" ? "Negative" : ready ? "Flat" : "…";
     tr.innerHTML = `
-      <td><strong>${row.symbol}</strong></td>
-      <td class="num">${row.spot ? money(row.spot) : "—"}</td>
       <td class="num">${row.strike ? inr(row.strike, 0) : "—"}</td>
       <td class="num">${row.ce ? inr(row.ce) : "—"}</td>
-      <td class="num">${row.pe ? inr(row.pe) : "—"}</td>
+      <td class="num">${row.pe || row.pe === 0 ? inr(row.pe) : "—"}</td>
       <td class="num">${ready ? money(row.synthetic) : "—"}</td>
+      <td class="num">${row.spot ? money(row.spot) : "—"}</td>
       <td class="num">${ready ? `${row.edge > 0 ? "+" : ""}${inr(row.edge)}` : "—"}</td>
-      <td class="${row.hit ? "signal-yes" : "signal-no"}">${ready ? (row.hit ? "LTP < synth" : "No") : "…"}</td>
+      <td class="num ${row.side === "positive" ? "signal-yes" : row.side === "negative" ? "signal-no-red" : ""}">${pctText}</td>
+      <td class="${row.side === "positive" ? "signal-yes" : row.side === "negative" ? "signal-no-red" : "signal-no"}">${sideText}</td>
     `;
     body.appendChild(tr);
   }
@@ -479,40 +503,50 @@ async function fillPlan1Premiums(snapshot, id) {
       if (!row.pe) row.pe = bookLtp(books, closes, row.pe_key, row.pe_token);
       finishPlan1Row(row);
     }
-    rows.sort((a, b) => (b.edge || 0) - (a.edge || 0) || a.symbol.localeCompare(b.symbol));
-    const priced = rows.filter((row) => row.ce > 0 && row.pe > 0).length;
-    const hits = rows.filter((row) => row.hit).length;
+    rows.sort((a, b) => a.strike - b.strike);
+    const priced = rows.filter((row) => row.ce > 0).length;
+    const pos = rows.filter((row) => row.side === "positive").length;
+    const neg = rows.filter((row) => row.side === "negative").length;
     renderPlan1({
       ...snapshot,
       rows,
       pairs_priced: priced,
-      hits,
-      message: `Option plan 1: ${priced} pairs priced, ${hits} with LTP < strike + CE − PE.`,
+      hits: pos,
+      message: `${snapshot.symbol || "Stock"}: ${priced} strikes priced · ${pos} positive · ${neg} negative.`,
       error: priced ? "" : (data.error || snapshot.error),
     });
     if (data.error && !priced) return;
   }
 }
 
+async function loadPlan1Universe() {
+  const snapshot = await fetchJson("/api/plan1");
+  renderPlan1(snapshot);
+}
+
 async function runPlan1() {
+  const symbol = document.getElementById("plan1-stock").value;
   const id = ++priceFillId;
   const btn = document.getElementById("plan1-btn");
   btn.disabled = true;
-  btn.textContent = "Scanning…";
+  btn.textContent = symbol ? "Loading strikes…" : "Loading names…";
   try {
-    const snapshot = await fetchJson("/api/plan1");
+    const snapshot = await fetchJson(symbol ? `/api/plan1?symbol=${encodeURIComponent(symbol)}` : "/api/plan1");
     renderPlan1(snapshot);
-    btn.textContent = "Loading premiums…";
-    await fillPlan1Premiums(snapshot, id);
+    if (symbol) {
+      btn.textContent = "Loading premiums…";
+      await fillPlan1Premiums(snapshot, id);
+    }
   } catch (error) {
     renderPlan1({
       connected: state.connected,
+      stocks: (state.plan1 && state.plan1.stocks) || [],
       rows: [],
       error: error.message,
     });
   } finally {
     btn.disabled = false;
-    btn.textContent = "Scan plan 1";
+    btn.textContent = "Load strikes";
   }
 }
 
@@ -526,7 +560,7 @@ document.querySelectorAll(".page-tab").forEach((btn) => {
     if (btn.dataset.tab === "plan1") {
       if (state.connected && !state.plan1Scanned) {
         state.plan1Scanned = true;
-        await runPlan1();
+        await loadPlan1Universe();
       } else if (state.plan1) {
         renderPlan1(state.plan1);
       }
@@ -586,8 +620,11 @@ document.getElementById("plan1-btn").addEventListener("click", () => {
   state.plan1Scanned = true;
   runPlan1();
 });
-document.getElementById("plan1-hits-only").addEventListener("change", () => {
-  if (state.plan1) renderPlan1(state.plan1);
+document.getElementById("plan1-stock").addEventListener("change", () => {
+  if (document.getElementById("plan1-stock").value) {
+    state.plan1Scanned = true;
+    runPlan1();
+  }
 });
 document.getElementById("drawer-close").addEventListener("click", closeDrawer);
 document.getElementById("backdrop").addEventListener("click", closeDrawer);

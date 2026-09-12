@@ -1,15 +1,5 @@
 const { loadInstruments, quoteMany, historicalCloses, lookupQuote, isIndex, rowToken } = require("./kite");
 
-function upcomingExpiries(rows, today, type) {
-  const found = new Set();
-  for (const row of rows) {
-    if (row.instrument_type !== type) continue;
-    const exp = (row.expiry || "").slice(0, 10);
-    if (exp && exp >= today) found.add(exp);
-  }
-  return [...found].sort();
-}
-
 function isCashEquity(row) {
   if (row.exchange !== "NSE") return false;
   const kind = row.instrument_type || "";
@@ -22,46 +12,51 @@ function ltpOf(book, token, closes) {
   return 0;
 }
 
-function buildOptionPairs(nfo, expiry) {
-  const byKey = new Map();
+function strikeSynthetic(strike, ce, pe) {
+  if (!strike || !ce) return 0;
+  return strike + ce - (pe || 0);
+}
+
+function listFoStocks(nfo, today) {
+  const expiriesByName = new Map();
   for (const row of nfo) {
     if (row.instrument_type !== "CE" && row.instrument_type !== "PE") continue;
-    if (isIndex(row.name)) continue;
+    if (isIndex(row.name) || !row.name) continue;
+    const exp = (row.expiry || "").slice(0, 10);
+    if (!exp || exp < today) continue;
+    if (!expiriesByName.has(row.name)) expiriesByName.set(row.name, new Set());
+    expiriesByName.get(row.name).add(exp);
+  }
+  return [...expiriesByName.keys()].sort().map((name) => {
+    const expiries = [...expiriesByName.get(name)].sort();
+    return { symbol: name, expiry: expiries[0], expiries };
+  });
+}
+
+function pairsForStock(nfo, symbol, expiry) {
+  const byStrike = new Map();
+  for (const row of nfo) {
+    if (row.name !== symbol) continue;
+    if (row.instrument_type !== "CE" && row.instrument_type !== "PE") continue;
     const exp = (row.expiry || "").slice(0, 10);
     if (exp !== expiry) continue;
     const strike = Number(row.strike);
     if (!strike) continue;
-    const key = `${row.name}|${strike}`;
-    const cur = byKey.get(key) || {
-      name: row.name,
+    const cur = byStrike.get(strike) || {
+      name: symbol,
       strike,
+      expiry,
       lot_size: Number(row.lot_size) || 1,
       ce: null,
       pe: null,
     };
     if (row.instrument_type === "CE") cur.ce = row;
     else cur.pe = row;
-    byKey.set(key, cur);
+    byStrike.set(strike, cur);
   }
-  const byName = new Map();
-  for (const pair of byKey.values()) {
-    if (!pair.ce || !pair.pe) continue;
-    if (!byName.has(pair.name)) byName.set(pair.name, []);
-    byName.get(pair.name).push(pair);
-  }
-  for (const list of byName.values()) list.sort((a, b) => a.strike - b.strike);
-  return byName;
-}
-
-function pickDeepItm(spot, pairs) {
-  const target = spot * 0.9;
-  const preferred = pairs.filter((pair) => pair.strike < spot && pair.strike >= spot * 0.8);
-  const fallback = pairs.filter((pair) => pair.strike < spot && pair.strike >= spot * 0.7);
-  const pool = preferred.length ? preferred : fallback;
-  if (!pool.length) return null;
-  return pool.reduce((best, pair) => (
-    Math.abs(pair.strike - target) < Math.abs(best.strike - target) ? pair : best
-  ));
+  return [...byStrike.values()]
+    .filter((pair) => pair.ce && pair.pe)
+    .sort((a, b) => a.strike - b.strike);
 }
 
 function pricedPlanRow(row, books, closes) {
@@ -70,6 +65,13 @@ function pricedPlanRow(row, books, closes) {
   const pe = ltpOf(lookupQuote(books, row.peKey, row.peToken), row.peToken, closes);
   const synthetic = strikeSynthetic(row.strike, ce, pe);
   const edge = spot && synthetic ? synthetic - spot : 0;
+  const edgePct = spot && synthetic ? (edge / spot) * 100 : 0;
+  let side = "";
+  if (spot && synthetic) {
+    if (edge > 0) side = "positive";
+    else if (edge < 0) side = "negative";
+    else side = "flat";
+  }
   return {
     symbol: row.symbol,
     name: row.name,
@@ -77,13 +79,13 @@ function pricedPlanRow(row, books, closes) {
     lot_size: row.lot_size,
     spot,
     strike: row.strike,
-    itm_pct: spot ? ((spot - row.strike) / spot) * 100 : 0,
     ce,
     pe,
     synthetic,
     edge,
-    edge_pct: spot ? (edge / spot) * 100 : 0,
-    hit: Boolean(spot && synthetic && synthetic > spot),
+    edge_pct: edgePct,
+    side,
+    hit: side === "positive",
     spot_token: row.spotToken || "",
     ce_token: row.ceToken || "",
     pe_token: row.peToken || "",
@@ -93,87 +95,90 @@ function pricedPlanRow(row, books, closes) {
   };
 }
 
-function strikeSynthetic(strike, ce, pe) {
-  if (!strike || !ce || pe == null || pe < 0) return 0;
-  return strike + ce - pe;
+async function plan1Universe(accessToken) {
+  const { nfo } = await loadInstruments(accessToken);
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+  const stocks = listFoStocks(nfo, today);
+  return {
+    stocks,
+    nearest_expiry: stocks[0] ? stocks[0].expiry : null,
+    rows: [],
+    stocks_scanned: stocks.length,
+    pairs_priced: 0,
+    hits: 0,
+  };
 }
 
-async function plan1Scan(accessToken) {
+async function plan1Stock(accessToken, symbol) {
   const { nse, nfo } = await loadInstruments(accessToken);
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
-  const optExpiries = upcomingExpiries(nfo, today, "CE");
-  const nearest = optExpiries[0] || null;
-  const pairsByName = buildOptionPairs(nfo, nearest);
+  const universe = listFoStocks(nfo, today);
+  const chosen = universe.find((row) => row.symbol === symbol);
+  if (!chosen) {
+    return {
+      stocks: universe,
+      symbol,
+      rows: [],
+      stocks_scanned: universe.length,
+      pairs_priced: 0,
+      hits: 0,
+      price_error: `${symbol} has no listed stock options.`,
+    };
+  }
 
   const equity = new Map();
   for (const row of nse) {
     if (!isCashEquity(row) || !row.tradingsymbol) continue;
     if (!equity.has(row.tradingsymbol)) equity.set(row.tradingsymbol, row);
   }
+  const equityRow = equity.get(symbol) || {};
+  const pairs = pairsForStock(nfo, symbol, chosen.expiry);
+  const selected = pairs.map((pair) => ({
+    symbol,
+    name: symbol,
+    expiry: chosen.expiry,
+    lot_size: pair.lot_size,
+    strike: pair.strike,
+    spotKey: `NSE:${symbol}`,
+    spotToken: rowToken(equityRow),
+    ceKey: `NFO:${pair.ce.tradingsymbol}`,
+    peKey: `NFO:${pair.pe.tradingsymbol}`,
+    ceToken: rowToken(pair.ce),
+    peToken: rowToken(pair.pe),
+  }));
 
-  const candidates = [];
-  for (const [name, pairs] of pairsByName.entries()) {
-    const equityRow = equity.get(name) || {};
-    candidates.push({
-      symbol: name,
-      name,
-      expiry: nearest,
-      lot_size: pairs[0].lot_size,
-      pairs,
-      spotKey: `NSE:${name}`,
-      spotToken: rowToken(equityRow),
-    });
-  }
-
-  const spotKeys = candidates.map((row) => row.spotKey);
-  const quoted = await quoteMany(accessToken, spotKeys);
-  let books = quoted.books || {};
-  let priceError = quoted.error || "";
-
-  const needSpotTokens = candidates
-    .filter((row) => !ltpOf(lookupQuote(books, row.spotKey, row.spotToken), row.spotToken, {}))
-    .map((row) => row.spotToken)
-    .filter(Boolean);
+  const keys = [selected[0] && selected[0].spotKey, ...selected.flatMap((row) => [row.ceKey, row.peKey])].filter(Boolean);
+  const quoted = await quoteMany(accessToken, keys);
+  const books = quoted.books || {};
   let closes = {};
-  if (needSpotTokens.length) {
-    const hist = await historicalCloses(accessToken, needSpotTokens.slice(0, 12));
+  const missing = [];
+  for (const row of selected) {
+    if (!ltpOf(lookupQuote(books, row.spotKey, row.spotToken), row.spotToken, {})) missing.push(row.spotToken);
+    if (!ltpOf(lookupQuote(books, row.ceKey, row.ceToken), row.ceToken, {})) missing.push(row.ceToken);
+    if (!ltpOf(lookupQuote(books, row.peKey, row.peToken), row.peToken, {})) missing.push(row.peToken);
+  }
+  if (missing.filter(Boolean).length) {
+    const hist = await historicalCloses(accessToken, [...new Set(missing.filter(Boolean))].slice(0, 24));
     closes = hist.closes || {};
   }
 
-  const selected = [];
-  for (const row of candidates) {
-    const spot = ltpOf(lookupQuote(books, row.spotKey, row.spotToken), row.spotToken, closes);
-    if (!spot) continue;
-    const pair = pickDeepItm(spot, row.pairs);
-    if (!pair) continue;
-    selected.push({
-      symbol: row.symbol,
-      name: row.name,
-      expiry: row.expiry,
-      lot_size: pair.lot_size,
-      strike: pair.strike,
-      spotKey: row.spotKey,
-      spotToken: row.spotToken,
-      ceKey: `NFO:${pair.ce.tradingsymbol}`,
-      peKey: `NFO:${pair.pe.tradingsymbol}`,
-      ceToken: rowToken(pair.ce),
-      peToken: rowToken(pair.pe),
-    });
-  }
-
-  const rows = selected
-    .map((row) => pricedPlanRow(row, books, closes))
-    .sort((a, b) => (b.edge || 0) - (a.edge || 0) || a.symbol.localeCompare(b.symbol));
-
+  const rows = selected.map((row) => pricedPlanRow(row, books, closes));
   return {
-    nearest_expiry: nearest,
-    expiries: optExpiries.slice(0, 2),
+    stocks: universe,
+    symbol,
+    nearest_expiry: chosen.expiry,
+    expiries: chosen.expiries,
     stocks_scanned: rows.length,
-    pairs_priced: rows.filter((row) => row.ce > 0 && row.pe > 0).length,
-    hits: rows.filter((row) => row.hit).length,
-    price_error: priceError,
+    pairs_priced: rows.filter((row) => row.ce > 0).length,
+    hits: rows.filter((row) => row.side === "positive").length,
+    price_error: quoted.error || "",
     rows,
   };
+}
+
+async function plan1Scan(accessToken, symbol) {
+  if (symbol) return plan1Stock(accessToken, symbol);
+  return plan1Universe(accessToken);
 }
 
 module.exports = { plan1Scan, pricedPlanRow, strikeSynthetic };

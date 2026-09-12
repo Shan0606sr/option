@@ -11,15 +11,25 @@ exports.handler = async (event) => {
         connected: false,
         market_open: marketOpen(),
         error: "Connect Zerodha first.",
+        stocks: [],
         rows: [],
       }),
     };
   }
 
+  const symbol = String((event.queryStringParameters || {}).symbol || "").trim();
   try {
-    const snapshot = await plan1Scan(access);
+    const snapshot = await plan1Scan(access, symbol);
     const now = new Date().toLocaleTimeString("en-IN", { hour12: false, timeZone: "Asia/Kolkata" });
     const open = marketOpen();
+    let message = "";
+    if (symbol && snapshot.rows.length) {
+      message = `${symbol}: ${snapshot.rows.length} strikes · ${snapshot.hits} positive · ${snapshot.rows.length - snapshot.hits} negative/flat${open ? "" : " (weekend last price OK)"}.`;
+    } else if (symbol) {
+      message = snapshot.price_error || `No strikes returned for ${symbol}.`;
+    } else {
+      message = `Select a stock. ${snapshot.stocks_scanned || 0} F&O names loaded.`;
+    }
     return {
       statusCode: 200,
       headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
@@ -27,11 +37,7 @@ exports.handler = async (event) => {
         connected: true,
         market_open: open,
         last_update: now,
-        message: snapshot.pairs_priced
-          ? `Option plan 1: ${snapshot.pairs_priced} deep-ITM pairs priced, ${snapshot.hits} with LTP < strike + CE − PE${open ? "" : " (weekend last price OK)"}.`
-          : (snapshot.stocks_scanned
-            ? `Picked ${snapshot.stocks_scanned} deep-ITM strikes. Loading CE and PE premiums next.`
-            : (snapshot.price_error || "No F&O spots available to pick deep-ITM strikes.")),
+        message,
         ...snapshot,
       }),
     };
@@ -43,6 +49,7 @@ exports.handler = async (event) => {
         connected: true,
         market_open: marketOpen(),
         error: error.message,
+        stocks: [],
         rows: [],
       }),
     };
