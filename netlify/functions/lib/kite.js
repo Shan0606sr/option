@@ -62,7 +62,8 @@ async function kiteGet(path, accessToken) {
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`Kite ${path} failed: ${res.status} ${text.slice(0, 180)}`);
+    const route = path.split("?")[0];
+    throw new Error(`Kite ${route} failed: ${res.status} ${text.slice(0, 160)}`);
   }
   return res;
 }
@@ -170,37 +171,23 @@ function lookupQuote(books, ...keys) {
 
 async function quoteMany(accessToken, keys) {
   const out = {};
-  const unique = [...new Set(keys.filter(Boolean).map(String))];
-  const chunk = 400;
+  const unique = [...new Set(keys.filter((key) => key && String(key).includes(":")))];
+  const chunk = 40;
   for (let i = 0; i < unique.length; i += chunk) {
     const slice = unique.slice(i, i + chunk);
     const qs = slice.map((key) => `i=${encodeURIComponent(key)}`).join("&");
-    const res = await kiteGet(`/quote?${qs}`, accessToken);
-    const json = await res.json();
-    const data = json.data || {};
-    for (const [key, q] of Object.entries(data)) {
-      indexQuote(out, key, q);
-    }
-    for (const requested of slice) {
-      if (!lookupQuote(out, requested) && data[requested]) {
-        indexQuote(out, requested, data[requested]);
+    try {
+      const res = await kiteGet(`/quote/ltp?${qs}`, accessToken);
+      const json = await res.json();
+      const data = json.data || {};
+      for (const [key, q] of Object.entries(data)) {
+        indexQuote(out, key, q);
       }
+    } catch (error) {
+      console.error(error.message);
     }
     if (i + chunk < unique.length) {
-      await new Promise((resolve) => setTimeout(resolve, 250));
-    }
-  }
-  const missing = unique.filter((key) => {
-    const book = lookupQuote(out, key);
-    return !book || !book.ltp;
-  }).slice(0, 400);
-  if (missing.length) {
-    const qs = missing.map((key) => `i=${encodeURIComponent(key)}`).join("&");
-    const res = await kiteGet(`/quote/ltp?${qs}`, accessToken);
-    const json = await res.json();
-    const data = json.data || {};
-    for (const [key, q] of Object.entries(data)) {
-      indexQuote(out, key, q);
+      await new Promise((resolve) => setTimeout(resolve, 200));
     }
   }
   return out;

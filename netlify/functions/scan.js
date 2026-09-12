@@ -33,7 +33,9 @@ exports.handler = async (event) => {
         connected: true,
         market_open: open,
         last_update: now,
-        message: `Cash vs nearest future: ${snapshot.spots_priced || 0} stocks priced, ${snapshot.futures_priced || 0} futures priced${open ? "" : " (weekend LTP / last close)"}.`,
+        message: snapshot.spots_priced || snapshot.futures_priced
+          ? `Cash vs nearest future: ${snapshot.spots_priced || 0} stocks priced, ${snapshot.futures_priced || 0} futures priced${open ? "" : " (weekend LTP / last close)"}.`
+          : "Kite login worked, but this API key cannot read market quotes. The app must be a paid Connect app, not Personal.",
         alerts: snapshot.opportunities.filter((row) => row.alert),
         ...snapshot,
       }),

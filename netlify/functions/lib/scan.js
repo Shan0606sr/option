@@ -48,7 +48,7 @@ async function liveScan(accessToken) {
     });
   }
 
-  const keys = futs.flatMap((row) => [row.spotKey, row.spotToken, row.futKey, row.futToken]);
+  const keys = futs.flatMap((row) => [row.spotKey, row.futKey]);
   const books = await quoteMany(accessToken, keys);
 
   const underlyings = futs.map((row) => {
