@@ -88,17 +88,21 @@ function splitCsvLine(line) {
 }
 
 function parseCsv(text) {
-  const lines = text.trim().split(/\r?\n/);
+  const lines = String(text).replace(/^\uFEFF/, "").trim().split(/\r?\n/);
   if (lines.length < 2) return [];
-  const headers = splitCsvLine(lines[0]);
+  const headers = splitCsvLine(lines[0]).map((header) => header.replace(/^\uFEFF/, "").trim());
   return lines.slice(1).map((line) => {
     const cols = splitCsvLine(line);
     const row = {};
     headers.forEach((header, i) => {
-      row[header] = cols[i] || "";
+      row[header] = (cols[i] || "").trim();
     });
     return row;
   });
+}
+
+function rowToken(row) {
+  return String(row.instrument_token || row["instrument_token"] || "").trim();
 }
 
 let instrumentCache = { day: "", nse: null, nfo: null };
@@ -169,6 +173,28 @@ function lookupQuote(books, ...keys) {
   return null;
 }
 
+async function yahooLast(symbolNs) {
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbolNs)}?interval=1d&range=10d`;
+  const res = await fetch(url, {
+    headers: { "User-Agent": "Mozilla/5.0 OptionParity/1.0" },
+  });
+  if (!res.ok) throw new Error(`Yahoo ${symbolNs} failed: ${res.status}`);
+  const json = await res.json();
+  const result = ((json.chart || {}).result || [])[0] || {};
+  const meta = result.meta || {};
+  const closes = ((((result.indicators || {}).quote || [])[0] || {}).close || []).filter((n) => n != null);
+  return Number(meta.regularMarketPrice || meta.previousClose || closes[closes.length - 1] || 0);
+}
+
+function yahooFutSymbol(name, expiry) {
+  if (!name || !expiry || expiry.length < 7) return "";
+  const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+  const year = expiry.slice(2, 4);
+  const month = months[Number(expiry.slice(5, 7)) - 1];
+  if (!month) return "";
+  return `${name}${year}${month}FUT.NS`;
+}
+
 async function quoteMany(accessToken, keys) {
   const out = {};
   let error = "";
@@ -176,9 +202,9 @@ async function quoteMany(accessToken, keys) {
   const chunk = 40;
   for (let i = 0; i < unique.length; i += chunk) {
     const slice = unique.slice(i, i + chunk);
-    const qs = slice.map((key) => `i=${encodeURIComponent(key)}`).join("&");
+    const qs = slice.map((key) => `i=${key}`).join("&");
     try {
-      const res = await kiteGet(`/quote/ltp?${qs}`, accessToken);
+      const res = await kiteGet(`/quote?${qs}`, accessToken);
       const json = await res.json();
       const data = json.data || {};
       for (const [key, q] of Object.entries(data)) {
@@ -295,6 +321,9 @@ module.exports = {
   loadInstruments,
   quoteMany,
   historicalCloses,
+  yahooLast,
+  yahooFutSymbol,
+  rowToken,
   lookupQuote,
   isIndex,
   accessCookie,

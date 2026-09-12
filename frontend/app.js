@@ -61,24 +61,34 @@ function visibleRows(rows) {
   }).map((row, i) => ({ ...row, rank: i + 1 }));
 }
 
-function setPill(connected) {
+function setPill(connected, needReconnect) {
   const pill = document.getElementById("conn-pill");
   const login = document.getElementById("login-btn");
-  if (connected) {
+  if (connected && needReconnect) {
+    pill.textContent = "Connected — reconnect for quotes";
+    pill.className = "pill pill-dummy";
+    login.hidden = false;
+    login.textContent = "Reconnect Zerodha";
+  } else if (connected) {
     pill.textContent = "Zerodha connected";
     pill.className = "pill pill-live";
     login.hidden = true;
+    login.textContent = "Connect Zerodha";
   } else {
     pill.textContent = "Zerodha login required";
     pill.className = "pill pill-dummy";
     login.hidden = false;
+    login.textContent = "Connect Zerodha";
   }
 }
 
 function render(snapshot) {
   state.snapshot = snapshot;
   state.connected = Boolean(snapshot.connected);
-  setPill(state.connected);
+  const denied = /PermissionException|Insufficient permission|quotes denied|Reconnect Zerodha/i.test(
+    `${snapshot.message || ""} ${snapshot.price_error || ""} ${snapshot.error || ""}`
+  );
+  setPill(state.connected, Boolean(state.connected && denied && !(snapshot.spots_priced || snapshot.futures_priced)));
 
   const rows = snapshot.underlyings || [];
   document.getElementById("last-update").textContent = snapshot.last_update || "--:--:--";
@@ -190,10 +200,12 @@ function recountPrices(rows) {
   };
 }
 
-function applyCloses(rows, closes) {
+function applyCloses(rows, closes, spots = {}, futures = {}) {
   for (const row of rows) {
     if (!row.spot && closes[String(row.spot_token)]) row.spot = closes[String(row.spot_token)];
     if (!row.future && closes[String(row.fut_token)]) row.future = closes[String(row.fut_token)];
+    if (!row.spot && spots[row.symbol]) row.spot = spots[row.symbol];
+    if (!row.future && futures[row.symbol]) row.future = futures[row.symbol];
     row.basis = row.future && row.spot ? row.future - row.spot : 0;
     row.basis_pct = row.spot ? (row.basis / row.spot) * 100 : 0;
   }
@@ -201,34 +213,34 @@ function applyCloses(rows, closes) {
 
 let priceFillId = 0;
 
-async function fillMissingPrices(snapshot) {
+async function fillMissingPrices(snapshot, id) {
   const rows = snapshot.underlyings || [];
-  const tokens = [];
-  for (const row of rows) {
-    if (!row.spot && row.spot_token) tokens.push(String(row.spot_token));
-    if (!row.future && row.fut_token) tokens.push(String(row.fut_token));
-  }
-  if (!tokens.length) return;
+  const missing = rows.filter((row) => (!row.spot || !row.future) && (row.spot_token || row.fut_token || row.symbol));
+  if (!missing.length) return;
 
-  const id = ++priceFillId;
-  const unique = [...new Set(tokens)];
-  const chunk = 12;
-  for (let i = 0; i < unique.length; i += chunk) {
+  const chunk = 6;
+  for (let i = 0; i < missing.length; i += chunk) {
     if (id !== priceFillId) return;
-    const slice = unique.slice(i, i + chunk);
-    const data = await fetchJson(`/api/prices?tokens=${encodeURIComponent(slice.join(","))}`);
+    const batch = missing.slice(i, i + chunk);
+    const tokens = batch.flatMap((row) => [row.spot_token, row.fut_token].filter(Boolean));
+    const params = new URLSearchParams({
+      tokens: tokens.join(","),
+      symbols: batch.map((row) => row.symbol).join(","),
+      expiry: batch[0].expiry || "",
+    });
+    const data = await fetchJson(`/api/prices?${params}`);
     if (id !== priceFillId) return;
-    applyCloses(rows, data.closes || {});
+    applyCloses(rows, data.closes || {}, data.spots || {}, data.futures || {});
     const counts = recountPrices(rows);
-    const done = Math.min(i + chunk, unique.length);
+    const done = Math.min(i + chunk, missing.length);
     render({
       ...snapshot,
       ...counts,
       underlyings: rows,
-      price_source: "historical",
+      price_error: "",
       message: counts.spots_priced || counts.futures_priced
-        ? `Last daily close: ${counts.spots_priced} stocks, ${counts.futures_priced} futures (${done}/${unique.length} tokens). Weekend close is fine.`
-        : (data.error || "Historical closes also failed. This Kite app may not include market data."),
+        ? `Last close: ${counts.spots_priced} stocks, ${counts.futures_priced} futures (${done}/${missing.length}). Saturday uses Friday close.`
+        : (data.error || "Still no prices. Reconnect Zerodha and confirm Netlify KITE_API_KEY is the paid app."),
       error: counts.spots_priced || counts.futures_priced ? "" : (data.error || snapshot.error),
     });
     if (data.error && !(counts.spots_priced || counts.futures_priced)) return;
@@ -236,7 +248,7 @@ async function fillMissingPrices(snapshot) {
 }
 
 async function runScan() {
-  priceFillId += 1;
+  const id = ++priceFillId;
   const btn = document.getElementById("scan-btn");
   btn.disabled = true;
   btn.textContent = "Scanning…";
@@ -249,7 +261,7 @@ async function runScan() {
     const snapshot = await fetchJson(`/api/scan?${params}`);
     render(snapshot);
     btn.textContent = "Loading prices…";
-    await fillMissingPrices(snapshot);
+    await fillMissingPrices(snapshot, id);
   } catch (error) {
     render({
       connected: state.connected,
@@ -316,7 +328,9 @@ document.addEventListener("keydown", (event) => {
 });
 
 window.setInterval(() => {
-  if (state.connected && document.visibilityState === "visible") runScan();
-}, 30000);
+  if (!state.connected || document.visibilityState !== "visible") return;
+  if (document.getElementById("scan-btn").disabled) return;
+  runScan();
+}, 120000);
 
 boot();

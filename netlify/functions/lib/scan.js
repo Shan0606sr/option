@@ -1,4 +1,4 @@
-const { loadInstruments, quoteMany, lookupQuote, isIndex } = require("./kite");
+const { loadInstruments, quoteMany, historicalCloses, lookupQuote, isIndex, rowToken } = require("./kite");
 
 function upcomingExpiries(rows, today, type) {
   const found = new Set();
@@ -16,11 +16,11 @@ function isCashEquity(row) {
   return kind === "EQ" || kind === "BE" || kind === "";
 }
 
-function pricedRow(row, books) {
+function pricedRow(row, books, closes) {
   const spotBook = lookupQuote(books, row.spotKey, row.spotToken);
   const futBook = lookupQuote(books, row.futKey, row.futToken);
-  const spot = (spotBook && spotBook.ltp) || 0;
-  const future = (futBook && futBook.ltp) || 0;
+  const spot = (spotBook && spotBook.ltp) || closes[String(row.spotToken)] || 0;
+  const future = (futBook && futBook.ltp) || closes[String(row.futToken)] || 0;
   const basis = future && spot ? future - spot : 0;
   return {
     symbol: row.symbol,
@@ -56,31 +56,61 @@ async function liveScan(accessToken) {
     if (row.instrument_type !== "FUT" || isIndex(row.name)) continue;
     const exp = (row.expiry || "").slice(0, 10);
     if (exp !== nearestFut) continue;
+    const equityRow = equity.get(row.name) || {};
     futs.push({
       symbol: row.name,
       name: row.name,
       expiry: exp,
       lot_size: Number(row.lot_size) || 1,
       futKey: `NFO:${row.tradingsymbol}`,
-      futToken: row.instrument_token,
+      futToken: rowToken(row),
       spotKey: `NSE:${row.name}`,
-      spotToken: (equity.get(row.name) || {}).instrument_token,
+      spotToken: rowToken(equityRow),
     });
   }
 
-  const quoted = await quoteMany(accessToken, futs.flatMap((row) => [row.spotKey, row.futKey]));
-  const books = quoted.books || {};
-  const underlyings = futs.map((row) => pricedRow(row, books)).sort((a, b) => a.symbol.localeCompare(b.symbol));
+  const quoteKeys = futs.flatMap((row) => [row.spotKey, row.futKey]);
+  const quoted = await quoteMany(accessToken, quoteKeys.slice(0, 2));
+  let books = quoted.books || {};
+  let priceError = quoted.error || "";
+  if (!priceError) {
+    const rest = await quoteMany(accessToken, quoteKeys.slice(2));
+    books = { ...books, ...(rest.books || {}) };
+    priceError = rest.error || "";
+  }
+
+  const needTokens = [];
+  for (const row of futs) {
+    const spotBook = lookupQuote(books, row.spotKey, row.spotToken);
+    const futBook = lookupQuote(books, row.futKey, row.futToken);
+    if (!(spotBook && spotBook.ltp) && row.spotToken) needTokens.push(row.spotToken);
+    if (!(futBook && futBook.ltp) && row.futToken) needTokens.push(row.futToken);
+  }
+
+  let closes = {};
+  let histError = "";
+  if (needTokens.length) {
+    const hist = await historicalCloses(accessToken, needTokens.slice(0, 12));
+    closes = hist.closes || {};
+    histError = hist.error || "";
+  }
+
+  const underlyings = futs
+    .map((row) => pricedRow(row, books, closes))
+    .sort((a, b) => a.symbol.localeCompare(b.symbol));
   const spots = underlyings.filter((row) => row.spot > 0).length;
   const futures = underlyings.filter((row) => row.future > 0).length;
+  const tokensReady = underlyings.filter((row) => row.spot_token && row.fut_token).length;
 
   return {
     stocks_scanned: underlyings.length,
     spots_priced: spots,
     futures_priced: futures,
-    price_source: spots || futures ? "quote" : "",
-    price_error: quoted.error || "",
-    needs_historical: Boolean(quoted.error || !(spots || futures)),
+    tokens_ready: tokensReady,
+    price_source: spots || futures ? (Object.keys(books).length ? "quote" : "historical") : "",
+    price_error: priceError,
+    hist_error: histError,
+    needs_historical: Boolean(needTokens.length),
     expiries: futExpiries.slice(0, 2),
     nearest_expiry: nearestFut,
     next_expiry: nextFut,

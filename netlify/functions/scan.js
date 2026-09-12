@@ -36,8 +36,8 @@ exports.handler = async (event) => {
         message: snapshot.spots_priced || snapshot.futures_priced
           ? `Cash vs nearest future: ${snapshot.spots_priced || 0} stocks priced, ${snapshot.futures_priced || 0} futures priced via ${snapshot.price_source || "quotes"}${open ? "" : " (weekend last close OK)"}.`
           : (snapshot.needs_historical
-            ? "Live quotes are blocked on this API key. Loading last daily closes next."
-            : (snapshot.price_error || "Kite login worked, but this API key cannot read live quotes or historical closes.")),
+            ? "Live quote call was denied for this session. Loading last daily closes next. If that stays empty, Reconnect Zerodha after Netlify uses the paid app API key."
+            : (snapshot.price_error || snapshot.hist_error || "No prices returned.")),
         alerts: snapshot.opportunities.filter((row) => row.alert),
         ...snapshot,
       }),
