@@ -34,6 +34,7 @@
     <nav class="page-tabs" role="tablist">
       <button type="button" class="page-tab active" data-tab="index">Index price</button>
       <button type="button" class="page-tab" data-tab="stocks">Cash vs Future</button>
+      <button type="button" class="page-tab" data-tab="plan1">Option plan 1</button>
     </nav>
 
     <section id="panel-index" class="index-panel">
@@ -114,6 +115,42 @@
     <p class="footnote">
       First check: cash stock vs nearest future. Live LTP if the API key allows quotes; otherwise last daily close.
     </p>
+    </section>
+
+    <section id="panel-plan1" hidden>
+      <section class="controls">
+        <div class="control">
+          <span class="label">Rule</span>
+          <p class="index-sub">LTP &lt; deep-ITM strike + CE − same-strike PE</p>
+        </div>
+        <label class="check plan1-filter">
+          <input id="plan1-hits-only" type="checkbox" />
+          Only LTP &lt; strike + CE − PE
+        </label>
+        <button id="plan1-btn" type="button" class="scan-btn">Scan plan 1</button>
+      </section>
+      <main class="table-wrap">
+        <table class="results plan1-table">
+          <thead>
+            <tr>
+              <th>Stock</th>
+              <th class="num">LTP</th>
+              <th class="num">Strike</th>
+              <th class="num">CE</th>
+              <th class="num">PE</th>
+              <th class="num">Strike + CE − PE</th>
+              <th class="num">Edge</th>
+              <th>Signal</th>
+            </tr>
+          </thead>
+          <tbody id="plan1-body"></tbody>
+        </table>
+        <p id="plan1-empty" class="empty">Connect Zerodha, then scan Option plan 1.</p>
+      </main>
+      <p class="footnote">
+        Deep ITM call is the strike nearest 90% of LTP (about 10% in-the-money), same strike put.
+        Example: LTP 600, 540 CE 70, 540 PE 5 → 540 + 70 − 5 = 605, which is above LTP.
+      </p>
     </section>
   </div>
 

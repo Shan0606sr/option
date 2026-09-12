@@ -11,6 +11,8 @@ const state = {
   connected: false,
   snapshot: null,
   scanned: false,
+  plan1: null,
+  plan1Scanned: false,
 };
 
 function inr(n, digits = 2) {
@@ -340,6 +342,7 @@ function showTab(tab) {
   });
   document.getElementById("panel-index").hidden = tab !== "index";
   document.getElementById("panel-stocks").hidden = tab !== "stocks";
+  document.getElementById("panel-plan1").hidden = tab !== "plan1";
 }
 
 async function consumeKiteRedirect() {
@@ -388,11 +391,145 @@ document.querySelectorAll("[data-expiry]").forEach((btn) => {
   });
 });
 
+function bookLtp(books, closes, key, token) {
+  const book = (books && (books[key] || books[String(token)])) || null;
+  if (book && book.ltp) return book.ltp;
+  if (token && closes && closes[String(token)]) return closes[String(token)];
+  return 0;
+}
+
+function finishPlan1Row(row) {
+  row.synthetic = row.strike && row.ce ? row.strike + row.ce - (row.pe || 0) : 0;
+  row.edge = row.spot && row.synthetic ? row.synthetic - row.spot : 0;
+  row.edge_pct = row.spot ? (row.edge / row.spot) * 100 : 0;
+  row.hit = Boolean(row.spot && row.synthetic && row.synthetic > row.spot);
+  return row;
+}
+
+function renderPlan1(snapshot) {
+  state.plan1 = snapshot;
+  state.connected = Boolean(snapshot.connected);
+  setPill(state.connected);
+  if (snapshot.last_update) document.getElementById("last-update").textContent = snapshot.last_update;
+  const rows = snapshot.rows || [];
+  const priced = rows.filter((row) => row.ce > 0 && row.pe > 0).length;
+  const hits = rows.filter((row) => row.hit).length;
+  document.getElementById("stocks-scanned").textContent = snapshot.stocks_scanned || rows.length || 0;
+  document.getElementById("opp-count").textContent = `${hits} hits / ${priced} priced`;
+
+  const bar = document.getElementById("alert-bar");
+  const notice = snapshot.message || snapshot.error;
+  if (notice) {
+    bar.classList.remove("hidden");
+    bar.textContent = notice;
+  } else {
+    bar.classList.add("hidden");
+  }
+
+  const hitsOnly = document.getElementById("plan1-hits-only").checked;
+  const visible = rows.filter((row) => !hitsOnly || row.hit);
+  const body = document.getElementById("plan1-body");
+  const empty = document.getElementById("plan1-empty");
+  body.innerHTML = "";
+  if (!visible.length) {
+    empty.classList.remove("hidden");
+    empty.textContent = state.connected
+      ? (hitsOnly ? "No row where LTP is below strike + CE − PE yet." : (snapshot.message || "No Option plan 1 rows."))
+      : "Connect Zerodha, then scan Option plan 1.";
+    return;
+  }
+  empty.classList.add("hidden");
+
+  for (const row of visible) {
+    const ready = row.spot && row.ce && row.pe;
+    const tr = document.createElement("tr");
+    if (row.hit) tr.className = "hit";
+    tr.innerHTML = `
+      <td><strong>${row.symbol}</strong></td>
+      <td class="num">${row.spot ? money(row.spot) : "—"}</td>
+      <td class="num">${row.strike ? inr(row.strike, 0) : "—"}</td>
+      <td class="num">${row.ce ? inr(row.ce) : "—"}</td>
+      <td class="num">${row.pe ? inr(row.pe) : "—"}</td>
+      <td class="num">${ready ? money(row.synthetic) : "—"}</td>
+      <td class="num">${ready ? `${row.edge > 0 ? "+" : ""}${inr(row.edge)}` : "—"}</td>
+      <td class="${row.hit ? "signal-yes" : "signal-no"}">${ready ? (row.hit ? "LTP < synth" : "No") : "…"}</td>
+    `;
+    body.appendChild(tr);
+  }
+}
+
+async function fillPlan1Premiums(snapshot, id) {
+  const rows = snapshot.rows || [];
+  const missing = rows.filter((row) => (!row.ce || !row.pe) && (row.ce_key || row.pe_key));
+  if (!missing.length) return;
+  const chunk = 16;
+  for (let i = 0; i < missing.length; i += chunk) {
+    if (id !== priceFillId) return;
+    const batch = missing.slice(i, i + chunk);
+    const params = new URLSearchParams({
+      keys: batch.flatMap((row) => [row.ce_key, row.pe_key].filter(Boolean)).join(","),
+      tokens: batch.flatMap((row) => [row.ce_token, row.pe_token].filter(Boolean)).join(","),
+    });
+    const data = await fetchJson(`/api/quotes?${params}`);
+    if (id !== priceFillId) return;
+    const books = data.books || {};
+    const closes = data.closes || {};
+    for (const row of rows) {
+      if (!row.ce) row.ce = bookLtp(books, closes, row.ce_key, row.ce_token);
+      if (!row.pe) row.pe = bookLtp(books, closes, row.pe_key, row.pe_token);
+      finishPlan1Row(row);
+    }
+    rows.sort((a, b) => (b.edge || 0) - (a.edge || 0) || a.symbol.localeCompare(b.symbol));
+    const priced = rows.filter((row) => row.ce > 0 && row.pe > 0).length;
+    const hits = rows.filter((row) => row.hit).length;
+    renderPlan1({
+      ...snapshot,
+      rows,
+      pairs_priced: priced,
+      hits,
+      message: `Option plan 1: ${priced} pairs priced, ${hits} with LTP < strike + CE − PE.`,
+      error: priced ? "" : (data.error || snapshot.error),
+    });
+    if (data.error && !priced) return;
+  }
+}
+
+async function runPlan1() {
+  const id = ++priceFillId;
+  const btn = document.getElementById("plan1-btn");
+  btn.disabled = true;
+  btn.textContent = "Scanning…";
+  try {
+    const snapshot = await fetchJson("/api/plan1");
+    renderPlan1(snapshot);
+    btn.textContent = "Loading premiums…";
+    await fillPlan1Premiums(snapshot, id);
+  } catch (error) {
+    renderPlan1({
+      connected: state.connected,
+      rows: [],
+      error: error.message,
+    });
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Scan plan 1";
+  }
+}
+
 document.querySelectorAll(".page-tab").forEach((btn) => {
   btn.addEventListener("click", async () => {
     showTab(btn.dataset.tab);
     if (btn.dataset.tab === "index") {
       if (state.connected) await loadNifty();
+      return;
+    }
+    if (btn.dataset.tab === "plan1") {
+      if (state.connected && !state.plan1Scanned) {
+        state.plan1Scanned = true;
+        await runPlan1();
+      } else if (state.plan1) {
+        renderPlan1(state.plan1);
+      }
       return;
     }
     if (state.connected && !state.scanned) {
@@ -410,6 +547,8 @@ async function logoutZerodha() {
   state.connected = false;
   state.snapshot = null;
   state.scanned = false;
+  state.plan1 = null;
+  state.plan1Scanned = false;
   setPill(false);
   document.getElementById("stocks-scanned").textContent = "0";
   document.getElementById("opp-count").textContent = "0";
@@ -428,6 +567,13 @@ async function logoutZerodha() {
       error: "Logged out. Connect Zerodha again.",
     });
   }
+  if (state.tab === "plan1") {
+    renderPlan1({
+      connected: false,
+      rows: [],
+      error: "Logged out. Connect Zerodha again.",
+    });
+  }
 }
 
 document.getElementById("logout-btn").addEventListener("click", logoutZerodha);
@@ -435,6 +581,13 @@ document.getElementById("nifty-btn").addEventListener("click", loadNifty);
 document.getElementById("scan-btn").addEventListener("click", () => {
   state.scanned = true;
   runScan();
+});
+document.getElementById("plan1-btn").addEventListener("click", () => {
+  state.plan1Scanned = true;
+  runPlan1();
+});
+document.getElementById("plan1-hits-only").addEventListener("change", () => {
+  if (state.plan1) renderPlan1(state.plan1);
 });
 document.getElementById("drawer-close").addEventListener("click", closeDrawer);
 document.getElementById("backdrop").addEventListener("click", closeDrawer);
@@ -446,6 +599,10 @@ window.setInterval(() => {
   if (!state.connected || document.visibilityState !== "visible") return;
   if (state.tab === "index") {
     if (!document.getElementById("nifty-btn").disabled) loadNifty();
+    return;
+  }
+  if (state.tab === "plan1") {
+    if (!document.getElementById("plan1-btn").disabled) runPlan1();
     return;
   }
   if (document.getElementById("scan-btn").disabled) return;

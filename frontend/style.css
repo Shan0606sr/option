@@ -437,6 +437,15 @@ button.logout-btn {
   letter-spacing: 0.06em;
 }
 
+.plan1-filter { min-width: 240px; margin-top: 18px; }
+
+.results.plan1-table { min-width: 980px; }
+
+.results tbody tr.hit { background: var(--green-dim); }
+.results tbody tr.hit:hover { background: #22462e; }
+.signal-yes { color: var(--green); font-weight: 600; letter-spacing: 0.06em; }
+.signal-no { color: var(--muted); letter-spacing: 0.06em; }
+
 @media (max-width: 900px) {
   .topbar { flex-direction: column; align-items: flex-start; }
   .scan-btn { margin-left: 0; }
