@@ -47,7 +47,11 @@ function visibleRows(rows) {
   const wantA = document.getElementById("strat-a").checked;
   const wantB = document.getElementById("strat-b").checked;
   return rows.filter((row) => {
-    if (row.gross_return < minReturn) return false;
+    if (row.used_ltp) {
+      if (minReturn > 0 && row.gross_return < minReturn) return false;
+    } else if (row.gross_return < minReturn) {
+      return false;
+    }
     if (row.strategy === "A" && !wantA) return false;
     if (row.strategy === "B" && !wantB) return false;
     if (LIQUIDITY_RANK[row.liquidity] > floor) return false;

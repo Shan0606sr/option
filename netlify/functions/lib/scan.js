@@ -91,10 +91,16 @@ async function liveScan(accessToken, { minReturn = 0, strategyA = true, strategy
   }));
 
   const rows = [];
+  let priced = 0;
   for (const quote of quotes) {
+    if ((quote.ce.ltp || quote.ce.bid || quote.ce.ask) && (quote.pe.ltp || quote.pe.bid || quote.pe.ask)) {
+      priced += 1;
+    }
     for (const strategy of strategies) {
       const opp = buildOpportunity(quote, strategy);
-      if (opp && opp.gross_return >= minReturn) rows.push(opp);
+      if (!opp) continue;
+      if (!opp.used_ltp && opp.gross_return < minReturn) continue;
+      rows.push(opp);
     }
   }
 
@@ -105,6 +111,7 @@ async function liveScan(accessToken, { minReturn = 0, strategyA = true, strategy
     next_expiry: expiries[1] || null,
     opportunities: rankOpportunities(rows),
     pairs_checked: selected.length,
+    pairs_priced: priced,
   };
 }
 

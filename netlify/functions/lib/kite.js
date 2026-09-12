@@ -104,7 +104,8 @@ function parseQuote(q) {
   const depth = q.depth || {};
   const buy = (depth.buy || [])[0] || {};
   const sell = (depth.sell || [])[0] || {};
-  const last = q.last_price || 0;
+  const close = (q.ohlc || {}).close || 0;
+  const last = q.last_price || close || 0;
   return {
     last_price: last,
     ltp: last,
@@ -130,6 +131,26 @@ async function quoteMany(accessToken, keys) {
       out[key] = parseQuote(q);
     }
     if (i + chunk < keys.length) {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  }
+  const missing = keys.filter((key) => !out[key] || !out[key].ltp).slice(0, 400);
+  for (let i = 0; i < missing.length; i += chunk) {
+    const slice = missing.slice(i, i + chunk);
+    const qs = slice.map((key) => `i=${encodeURIComponent(key)}`).join("&");
+    const res = await kiteGet(`/quote/ltp?${qs}`, accessToken);
+    const json = await res.json();
+    const data = json.data || {};
+    for (const [key, q] of Object.entries(data)) {
+      const last = q.last_price || 0;
+      if (!out[key]) {
+        out[key] = { last_price: last, ltp: last, volume: 0, oi: 0, bid: 0, bid_qty: 0, ask: 0, ask_qty: 0 };
+      } else if (!out[key].ltp && last) {
+        out[key].ltp = last;
+        out[key].last_price = last;
+      }
+    }
+    if (i + chunk < missing.length) {
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
   }

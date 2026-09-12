@@ -35,7 +35,7 @@ exports.handler = async (event) => {
         last_update: now,
         message: open
           ? null
-          : "NSE is closed. Rows below use last traded price, not bid/ask. Do not treat them as executable until Monday 09:15 IST.",
+          : `NSE is closed. Showing last traded price estimates (${snapshot.pairs_priced || 0} priced pairs). Not executable until Monday 09:15 IST.`,
         alerts: snapshot.opportunities.filter((row) => row.alert),
         ...snapshot,
       }),
