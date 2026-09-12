@@ -35,7 +35,7 @@ exports.handler = async (event) => {
         last_update: now,
         message: open
           ? null
-          : "NSE is closed (weekend / after hours). Bid and ask are usually empty until Monday 09:15 IST. The scanner will not use LTP.",
+          : "NSE is closed. Rows below use last traded price, not bid/ask. Do not treat them as executable until Monday 09:15 IST.",
         alerts: snapshot.opportunities.filter((row) => row.alert),
         ...snapshot,
       }),

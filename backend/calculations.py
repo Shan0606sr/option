@@ -186,35 +186,51 @@ def _leg(brokerage, stt, exchange, gst, stamp, sebi, other) -> dict[str, float]:
     }
 
 
+def _book_px(book: dict, side: str) -> tuple[float, bool]:
+    live = float(book.get(side) or 0)
+    ltp = float(book.get("ltp") or book.get("last_price") or 0)
+    if live > 0:
+        return live, False
+    return ltp, ltp > 0
+
+
 def build_opportunity(quote: dict[str, Any], strategy: str) -> dict[str, Any] | None:
     spot = float(quote["spot"])
     strike = float(quote["strike"])
     lot = int(quote["lot_size"])
     ce = quote["ce"]
     pe = quote["pe"]
+    if spot <= 0:
+        return None
 
     if strategy == STRATEGY_A:
-        if ce.get("bid", 0) <= 0 or pe.get("ask", 0) <= 0:
-            return None
-        ce_px, pe_px = ce["bid"], pe["ask"]
+        ce_px, ce_ltp = _book_px(ce, "bid")
+        pe_px, pe_ltp = _book_px(pe, "ask")
     else:
-        if ce.get("ask", 0) <= 0 or pe.get("bid", 0) <= 0:
-            return None
-        ce_px, pe_px = ce["ask"], pe["bid"]
+        ce_px, ce_ltp = _book_px(ce, "ask")
+        pe_px, pe_ltp = _book_px(pe, "bid")
+    if ce_px <= 0 or pe_px <= 0:
+        return None
+    used_ltp = ce_ltp or pe_ltp
 
-    pps = profit_per_share(strategy, spot, strike, ce, pe)
-    cps = capital_per_share(strategy, spot, strike, ce, pe)
+    if strategy == STRATEGY_A:
+        pps = strike - spot + ce_px - pe_px
+        cps = spot - ce_px + pe_px
+    else:
+        pps = spot - strike - ce_px + pe_px
+        cps = strike + ce_px - pe_px
     if cps <= 0:
         return None
 
     exec_qty = executable_quantity(strategy, lot, ce, pe)
-    full_lot = full_lot_available(strategy, lot, ce, pe)
-    liq = liquidity_score(strategy, lot, ce, pe)
+    qty = lot if used_ltp and exec_qty <= 0 else exec_qty
+    full_lot = (not used_ltp) and full_lot_available(strategy, lot, ce, pe)
+    liq = "LTP" if used_ltp else liquidity_score(strategy, lot, ce, pe)
     gross_return = pps / cps * 100
-    capital = cps * exec_qty
-    gross_profit = pps * exec_qty
+    capital = cps * qty
+    gross_profit = pps * qty
     lot_profit = pps * lot
-    charges = estimate_charges(strategy, spot, ce_px, pe_px, exec_qty)
+    charges = estimate_charges(strategy, spot, ce_px, pe_px, qty)
     net_profit = gross_profit - charges["total"]
     net_return = (net_profit / capital * 100) if capital else 0.0
     dte = days_to_expiry(quote["expiry"])
@@ -223,7 +239,7 @@ def build_opportunity(quote: dict[str, Any], strategy: str) -> dict[str, Any] | 
         effective = cps
         guaranteed = strike
     else:
-        effective = spot - ce["ask"] + pe["bid"]
+        effective = spot - ce_px + pe_px
         guaranteed = strike
 
     return {
@@ -264,19 +280,21 @@ def build_opportunity(quote: dict[str, Any], strategy: str) -> dict[str, Any] | 
         "executable_qty": exec_qty,
         "full_lot": full_lot,
         "partial": exec_qty > 0 and not full_lot,
+        "used_ltp": used_ltp,
         "liquidity": liq,
         "days_to_expiry": dte,
         "effective_cost": round(effective, 4),
         "guaranteed_value": guaranteed,
         "alert": (
-            net_return >= config.ALERT_NET_RETURN
+            not used_ltp
+            and net_return >= config.ALERT_NET_RETURN
             and full_lot
             and dte >= config.ALERT_MIN_EXPIRY_DAYS
         ),
     }
 
 
-LIQUIDITY_RANK = {"HIGH": 0, "MEDIUM": 1, "LOW": 2}
+LIQUIDITY_RANK = {"HIGH": 0, "MEDIUM": 1, "LOW": 2, "LTP": 3}
 
 
 def rank_opportunities(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:

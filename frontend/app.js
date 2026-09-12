@@ -1,5 +1,5 @@
-const LIQUIDITY_RANK = { HIGH: 0, MEDIUM: 1, LOW: 2 };
-const LIQUIDITY_FLOOR = { ALL: 2, MEDIUM: 1, HIGH: 0 };
+const LIQUIDITY_RANK = { HIGH: 0, MEDIUM: 1, LOW: 2, LTP: 3 };
+const LIQUIDITY_FLOOR = { ALL: 3, MEDIUM: 1, HIGH: 0 };
 
 const state = {
   expiry: "nearest",
@@ -115,14 +115,15 @@ function render(snapshot) {
     tr.dataset.id = row.id;
     tr.setAttribute("role", "button");
     tr.tabIndex = 0;
-    const ceSide = row.strategy === "A" ? "bid" : "ask";
-    const peSide = row.strategy === "A" ? "ask" : "bid";
+    const ceSide = row.used_ltp ? "ltp" : row.strategy === "A" ? "bid" : "ask";
+    const peSide = row.used_ltp ? "ltp" : row.strategy === "A" ? "ask" : "bid";
     tr.innerHTML = `
       <td class="rank rank-${row.liquidity}">${row.rank}</td>
       <td>
         <div class="stock-cell">
           <strong>${row.symbol}</strong>
           <span class="stock-meta">${row.strategy === "A" ? "Buy stock / sell CE / buy PE" : "Sell stock / buy CE / sell PE"}</span>
+          ${row.used_ltp ? `<span class="warn">LTP estimate — not executable</span>` : ""}
           ${row.partial ? `<span class="warn">Partial liquidity · ${inr(row.executable_qty, 0)} / ${inr(row.lot_size, 0)}</span>` : ""}
         </div>
       </td>

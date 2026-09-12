@@ -236,6 +236,9 @@ a.login-btn {
 .liq-HIGH { color: var(--green); }
 .liq-MEDIUM { color: var(--amber); }
 .liq-LOW { color: var(--red); }
+.liq-LTP { color: var(--muted); }
+
+.rank-LTP { color: var(--muted); }
 
 .rank { font-family: var(--mono); font-weight: 500; }
 .rank-HIGH { color: var(--green); }

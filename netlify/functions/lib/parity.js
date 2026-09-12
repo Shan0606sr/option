@@ -8,7 +8,7 @@ const GOOD_OI = 100000;
 const LOW_VOLUME = 2000;
 const LOW_OI = 10000;
 const PARTIAL_LOW_FRACTION = 0.1;
-const LIQUIDITY_RANK = { HIGH: 0, MEDIUM: 1, LOW: 2 };
+const LIQUIDITY_RANK = { HIGH: 0, MEDIUM: 1, LOW: 2, LTP: 3 };
 
 function round2(n) {
   return Math.round(n * 100) / 100;
@@ -88,16 +88,30 @@ function estimateCharges(strategy, spot, cePx, pePx, qty) {
   return out;
 }
 
+function bookPx(book, side) {
+  const live = Number(book[side] || 0);
+  const ltp = Number(book.ltp || book.last_price || 0);
+  if (live > 0) return { price: live, usedLtp: false };
+  return { price: ltp, usedLtp: ltp > 0 };
+}
+
 function buildOpportunity(quote, strategy) {
   const { spot, strike, lot_size: lot, ce, pe } = quote;
-  const cePx = strategy === "A" ? ce.bid : ce.ask;
-  const pePx = strategy === "A" ? pe.ask : pe.bid;
+  if (spot <= 0) return null;
+  const ceSide = strategy === "A" ? "bid" : "ask";
+  const peSide = strategy === "A" ? "ask" : "bid";
+  const ceFill = bookPx(ce, ceSide);
+  const peFill = bookPx(pe, peSide);
+  const cePx = ceFill.price;
+  const pePx = peFill.price;
   if (cePx <= 0 || pePx <= 0) return null;
-  const pps = strategy === "A" ? strike - spot + ce.bid - pe.ask : spot - strike - ce.ask + pe.bid;
-  const cps = strategy === "A" ? spot - ce.bid + pe.ask : strike + ce.ask - pe.bid;
+  const usedLtp = ceFill.usedLtp || peFill.usedLtp;
+  const pps = strategy === "A" ? strike - spot + cePx - pePx : spot - strike - cePx + pePx;
+  const cps = strategy === "A" ? spot - cePx + pePx : strike + cePx - pePx;
   if (cps <= 0) return null;
-  const qty = execQty(strategy, lot, ce, pe);
-  const isFull = fullLot(strategy, lot, ce, pe);
+  const liveQty = execQty(strategy, lot, ce, pe);
+  const qty = usedLtp && liveQty <= 0 ? lot : liveQty;
+  const isFull = !usedLtp && fullLot(strategy, lot, ce, pe);
   const grossReturn = (pps / cps) * 100;
   const capital = cps * qty;
   const grossProfit = pps * qty;
@@ -125,14 +139,15 @@ function buildOpportunity(quote, strategy) {
     lot_profit: pps * lot,
     net_profit: netProfit,
     charges,
-    executable_qty: qty,
+    executable_qty: liveQty,
     full_lot: isFull,
-    partial: qty > 0 && !isFull,
-    liquidity: liquidityScore(strategy, lot, ce, pe),
+    partial: liveQty > 0 && !isFull,
+    used_ltp: usedLtp,
+    liquidity: usedLtp ? "LTP" : liquidityScore(strategy, lot, ce, pe),
     days_to_expiry: dte,
-    effective_cost: strategy === "A" ? cps : spot - ce.ask + pe.bid,
+    effective_cost: strategy === "A" ? cps : spot - cePx + pePx,
     guaranteed_value: strike,
-    alert: netReturn >= ALERT_NET_RETURN && isFull && dte >= ALERT_MIN_EXPIRY_DAYS,
+    alert: !usedLtp && netReturn >= ALERT_NET_RETURN && isFull && dte >= ALERT_MIN_EXPIRY_DAYS,
   };
 }
 
