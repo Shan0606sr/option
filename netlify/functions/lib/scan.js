@@ -1,4 +1,4 @@
-const { loadInstruments, quoteMany, isIndex } = require("./kite");
+const { loadInstruments, quoteMany, lookupQuote, isIndex } = require("./kite");
 const { buildOpportunity, rankOpportunities } = require("./parity");
 
 function upcomingExpiries(nfo, today) {
@@ -16,6 +16,17 @@ function nearestStrikes(strikes, spot, count) {
     .sort((a, b) => Math.abs(a - spot) - Math.abs(b - spot))
     .slice(0, count)
     .sort((a, b) => a - b);
+}
+
+function emptyBook(ltp) {
+  return { ltp: ltp || 0, last_price: ltp || 0, volume: 0, oi: 0, bid: 0, ask: 0, bid_qty: 0, ask_qty: 0 };
+}
+
+function bookFor(books, key, token, dumpLtp) {
+  const found = lookupQuote(books, key, token);
+  if (found && (found.ltp || found.bid || found.ask)) return found;
+  if (dumpLtp > 0) return { ...emptyBook(dumpLtp), ...(found || {}) , ltp: found?.ltp || dumpLtp, last_price: found?.last_price || dumpLtp };
+  return found || emptyBook(0);
 }
 
 async function liveScan(accessToken, { minReturn = 0, strategyA = true, strategyB = true } = {}) {
@@ -43,22 +54,40 @@ async function liveScan(accessToken, { minReturn = 0, strategyA = true, strategy
         lot_size: Number(row.lot_size) || 1,
         ceKey: null,
         peKey: null,
+        ceToken: null,
+        peToken: null,
+        ceDumpLtp: 0,
+        peDumpLtp: 0,
       });
     }
     const pair = chains.get(key);
-    const qkey = `NFO:${row.tradingsymbol}`;
-    if (row.instrument_type === "CE") pair.ceKey = qkey;
-    if (row.instrument_type === "PE") pair.peKey = qkey;
+    if (row.instrument_type === "CE") {
+      pair.ceKey = `NFO:${row.tradingsymbol}`;
+      pair.ceToken = row.instrument_token;
+      pair.ceDumpLtp = Number(row.last_price) || 0;
+    }
+    if (row.instrument_type === "PE") {
+      pair.peKey = `NFO:${row.tradingsymbol}`;
+      pair.peToken = row.instrument_token;
+      pair.peDumpLtp = Number(row.last_price) || 0;
+    }
   }
 
   const symbols = [...new Set([...chains.values()].map((p) => p.symbol))];
-  const spotKeys = symbols.map((sym) => `NSE:${sym}`);
+  const spotKeys = symbols.flatMap((sym) => {
+    const row = equity.get(sym);
+    return [`NSE:${sym}`, row && row.instrument_token].filter(Boolean);
+  });
   const spots = await quoteMany(accessToken, spotKeys);
 
   const selected = [];
+  let spotsPriced = 0;
   for (const symbol of symbols) {
-    const spot = (spots[`NSE:${symbol}`] || {}).last_price || 0;
+    const eq = equity.get(symbol);
+    const live = lookupQuote(spots, `NSE:${symbol}`, eq && eq.instrument_token);
+    const spot = (live && live.last_price) || Number(eq && eq.last_price) || 0;
     if (spot <= 0) continue;
+    spotsPriced += 1;
     const byExpiry = new Map();
     for (const pair of chains.values()) {
       if (pair.symbol !== symbol || !pair.ceKey || !pair.peKey) continue;
@@ -66,14 +95,14 @@ async function liveScan(accessToken, { minReturn = 0, strategyA = true, strategy
       byExpiry.get(pair.expiry).push(pair);
     }
     for (const pairs of byExpiry.values()) {
-      const keep = new Set(nearestStrikes(pairs.map((p) => p.strike), spot, 3));
+      const keep = new Set(nearestStrikes(pairs.map((p) => p.strike), spot, 4));
       for (const pair of pairs) {
         if (keep.has(pair.strike)) selected.push({ ...pair, spot });
       }
     }
   }
 
-  const optionKeys = selected.flatMap((p) => [p.ceKey, p.peKey]);
+  const optionKeys = selected.flatMap((p) => [p.ceKey, p.peKey, p.ceToken, p.peToken]);
   const books = await quoteMany(accessToken, optionKeys);
   const strategies = [];
   if (strategyA) strategies.push("A");
@@ -86,8 +115,8 @@ async function liveScan(accessToken, { minReturn = 0, strategyA = true, strategy
     strike: pair.strike,
     spot: pair.spot,
     lot_size: pair.lot_size,
-    ce: { ltp: 0, volume: 0, oi: 0, bid: 0, ask: 0, bid_qty: 0, ask_qty: 0, ...(books[pair.ceKey] || {}) },
-    pe: { ltp: 0, volume: 0, oi: 0, bid: 0, ask: 0, bid_qty: 0, ask_qty: 0, ...(books[pair.peKey] || {}) },
+    ce: bookFor(books, pair.ceKey, pair.ceToken, pair.ceDumpLtp),
+    pe: bookFor(books, pair.peKey, pair.peToken, pair.peDumpLtp),
   }));
 
   const rows = [];
@@ -99,13 +128,13 @@ async function liveScan(accessToken, { minReturn = 0, strategyA = true, strategy
     for (const strategy of strategies) {
       const opp = buildOpportunity(quote, strategy);
       if (!opp) continue;
-      if (!opp.used_ltp && opp.gross_return < minReturn) continue;
       rows.push(opp);
     }
   }
 
   return {
     stocks_scanned: symbols.length,
+    spots_priced: spotsPriced,
     expiries,
     nearest_expiry: expiries[0] || null,
     next_expiry: expiries[1] || null,

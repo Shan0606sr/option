@@ -67,12 +67,31 @@ async function kiteGet(path, accessToken) {
   return res;
 }
 
+function splitCsvLine(line) {
+  const cols = [];
+  let cur = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i += 1) {
+    const ch = line[i];
+    if (ch === '"') {
+      inQuotes = !inQuotes;
+    } else if (ch === "," && !inQuotes) {
+      cols.push(cur);
+      cur = "";
+    } else {
+      cur += ch;
+    }
+  }
+  cols.push(cur);
+  return cols;
+}
+
 function parseCsv(text) {
   const lines = text.trim().split(/\r?\n/);
   if (lines.length < 2) return [];
-  const headers = lines[0].split(",");
+  const headers = splitCsvLine(lines[0]);
   return lines.slice(1).map((line) => {
-    const cols = line.split(",");
+    const cols = splitCsvLine(line);
     const row = {};
     headers.forEach((header, i) => {
       row[header] = cols[i] || "";
@@ -105,7 +124,7 @@ function parseQuote(q) {
   const buy = (depth.buy || [])[0] || {};
   const sell = (depth.sell || [])[0] || {};
   const close = (q.ohlc || {}).close || 0;
-  const last = q.last_price || close || 0;
+  const last = Number(q.last_price || close || 0);
   return {
     last_price: last,
     ltp: last,
@@ -115,43 +134,73 @@ function parseQuote(q) {
     bid_qty: buy.quantity || 0,
     ask: sell.price || 0,
     ask_qty: sell.quantity || 0,
+    instrument_token: q.instrument_token,
   };
+}
+
+function indexQuote(out, key, q) {
+  const parsed = parseQuote(q);
+  const aliases = new Set([String(key)]);
+  if (key && String(key).includes(":")) {
+    const [ex, sym] = String(key).split(":");
+    aliases.add(`${ex.toUpperCase()}:${sym}`);
+    aliases.add(sym);
+  }
+  if (q.instrument_token) aliases.add(String(q.instrument_token));
+  for (const alias of aliases) {
+    if (alias) out[alias] = parsed;
+  }
+}
+
+function lookupQuote(books, ...keys) {
+  for (const key of keys) {
+    if (key == null || key === "") continue;
+    if (books[key]) return books[key];
+    if (books[String(key)]) return books[String(key)];
+    const asStr = String(key);
+    if (asStr.includes(":")) {
+      const sym = asStr.split(":")[1];
+      if (books[sym]) return books[sym];
+      const upper = `${asStr.split(":")[0].toUpperCase()}:${sym}`;
+      if (books[upper]) return books[upper];
+    }
+  }
+  return null;
 }
 
 async function quoteMany(accessToken, keys) {
   const out = {};
+  const unique = [...new Set(keys.filter(Boolean).map(String))];
   const chunk = 400;
-  for (let i = 0; i < keys.length; i += chunk) {
-    const slice = keys.slice(i, i + chunk);
+  for (let i = 0; i < unique.length; i += chunk) {
+    const slice = unique.slice(i, i + chunk);
     const qs = slice.map((key) => `i=${encodeURIComponent(key)}`).join("&");
     const res = await kiteGet(`/quote?${qs}`, accessToken);
     const json = await res.json();
     const data = json.data || {};
     for (const [key, q] of Object.entries(data)) {
-      out[key] = parseQuote(q);
+      indexQuote(out, key, q);
     }
-    if (i + chunk < keys.length) {
+    for (const requested of slice) {
+      if (!lookupQuote(out, requested) && data[requested]) {
+        indexQuote(out, requested, data[requested]);
+      }
+    }
+    if (i + chunk < unique.length) {
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
   }
-  const missing = keys.filter((key) => !out[key] || !out[key].ltp).slice(0, 400);
-  for (let i = 0; i < missing.length; i += chunk) {
-    const slice = missing.slice(i, i + chunk);
-    const qs = slice.map((key) => `i=${encodeURIComponent(key)}`).join("&");
+  const missing = unique.filter((key) => {
+    const book = lookupQuote(out, key);
+    return !book || !book.ltp;
+  }).slice(0, 400);
+  if (missing.length) {
+    const qs = missing.map((key) => `i=${encodeURIComponent(key)}`).join("&");
     const res = await kiteGet(`/quote/ltp?${qs}`, accessToken);
     const json = await res.json();
     const data = json.data || {};
     for (const [key, q] of Object.entries(data)) {
-      const last = q.last_price || 0;
-      if (!out[key]) {
-        out[key] = { last_price: last, ltp: last, volume: 0, oi: 0, bid: 0, bid_qty: 0, ask: 0, ask_qty: 0 };
-      } else if (!out[key].ltp && last) {
-        out[key].ltp = last;
-        out[key].last_price = last;
-      }
-    }
-    if (i + chunk < missing.length) {
-      await new Promise((resolve) => setTimeout(resolve, 250));
+      indexQuote(out, key, q);
     }
   }
   return out;
@@ -200,6 +249,7 @@ module.exports = {
   exchangeRequestToken,
   loadInstruments,
   quoteMany,
+  lookupQuote,
   isIndex,
   accessCookie,
   readAccessCookie,
