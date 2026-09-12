@@ -171,6 +171,7 @@ function lookupQuote(books, ...keys) {
 
 async function quoteMany(accessToken, keys) {
   const out = {};
+  let error = "";
   const unique = [...new Set(keys.filter((key) => key && String(key).includes(":")))];
   const chunk = 40;
   for (let i = 0; i < unique.length; i += chunk) {
@@ -183,14 +184,54 @@ async function quoteMany(accessToken, keys) {
       for (const [key, q] of Object.entries(data)) {
         indexQuote(out, key, q);
       }
-    } catch (error) {
-      console.error(error.message);
-    }
-    if (i + chunk < unique.length) {
-      await new Promise((resolve) => setTimeout(resolve, 200));
+    } catch (err) {
+      error = err.message;
+      break;
     }
   }
-  return out;
+  return { books: out, error };
+}
+
+function istYmd(daysBack = 0) {
+  const when = new Date(Date.now() - daysBack * 86400000);
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(when);
+}
+
+async function historicalClose(accessToken, token) {
+  const path = `/instruments/historical/${token}/day?from=${istYmd(21)}&to=${istYmd(0)}`;
+  const res = await kiteGet(path, accessToken);
+  const json = await res.json();
+  const candles = (json.data && json.data.candles) || [];
+  if (!candles.length) return 0;
+  return Number(candles[candles.length - 1][4]) || 0;
+}
+
+async function historicalCloses(accessToken, tokens) {
+  const closes = {};
+  let error = "";
+  const unique = [...new Set(tokens.filter(Boolean).map(String))];
+  const chunk = 8;
+  for (let i = 0; i < unique.length; i += chunk) {
+    const slice = unique.slice(i, i + chunk);
+    const results = await Promise.all(slice.map(async (token) => {
+      try {
+        return [token, await historicalClose(accessToken, token)];
+      } catch (err) {
+        error = err.message;
+        return [token, 0];
+      }
+    }));
+    for (const [token, close] of results) {
+      if (close) closes[token] = close;
+    }
+    if (error && Object.keys(closes).length === 0) break;
+  }
+  return { closes, error };
 }
 
 function isIndex(name) {
@@ -236,6 +277,7 @@ module.exports = {
   exchangeRequestToken,
   loadInstruments,
   quoteMany,
+  historicalCloses,
   lookupQuote,
   isIndex,
   accessCookie,
