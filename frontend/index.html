@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Option Parity Scanner</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"></div>
+        <div>
+          <h1>Option Parity Scanner</h1>
+          <p class="brand-sub">Scan → verify → execute manually</p>
+        </div>
+      </div>
+      <div class="status-strip">
+        <span id="conn-pill" class="pill pill-dummy">Dummy data</span>
+        <span class="stat"><em>Last update</em> <strong id="last-update">--:--:--</strong></span>
+        <span class="stat"><em>Stocks scanned</em> <strong id="stocks-scanned">0</strong></span>
+        <span class="stat"><em>Opportunities</em> <strong id="opp-count">0</strong></span>
+      </div>
+    </header>
+
+    <div id="alert-bar" class="alert-bar hidden" role="status"></div>
+
+    <section class="controls">
+      <div class="control">
+        <span class="label">Expiry</span>
+        <div class="seg" role="tablist">
+          <button type="button" class="seg-btn active" data-expiry="nearest">Nearest</button>
+          <button type="button" class="seg-btn" data-expiry="next">Next</button>
+          <button type="button" class="seg-btn" data-expiry="all">All</button>
+        </div>
+      </div>
+      <label class="control">
+        <span class="label">Minimum return</span>
+        <div class="input-suffix">
+          <input id="min-return" type="number" min="0" step="0.01" value="0.00" />
+          <span>%</span>
+        </div>
+      </label>
+      <label class="control">
+        <span class="label">Minimum liquidity</span>
+        <select id="min-liquidity">
+          <option value="ALL" selected>All</option>
+          <option value="HIGH">High</option>
+          <option value="MEDIUM">Medium+</option>
+        </select>
+      </label>
+      <fieldset class="control strategies">
+        <legend class="label">Strategy</legend>
+        <label class="check"><input id="strat-a" type="checkbox" checked /> Buy Stock + Sell CE + Buy PE</label>
+        <label class="check"><input id="strat-b" type="checkbox" checked /> Sell Stock + Buy CE + Sell PE</label>
+      </fieldset>
+      <button id="scan-btn" type="button" class="scan-btn">Scan now</button>
+    </section>
+
+    <main class="table-wrap">
+      <table class="results">
+        <thead>
+          <tr>
+            <th>Rank</th>
+            <th>Stock</th>
+            <th>Expiry</th>
+            <th class="num">Strike</th>
+            <th class="num">Spot</th>
+            <th class="num">CE</th>
+            <th class="num">PE</th>
+            <th class="num">Profit</th>
+            <th class="num">Return</th>
+            <th class="num">Net</th>
+            <th class="num">Capital</th>
+            <th class="num">Lot profit</th>
+            <th>Liquidity</th>
+          </tr>
+        </thead>
+        <tbody id="results-body"></tbody>
+      </table>
+      <p id="empty-state" class="empty hidden">No opportunities match these filters.</p>
+    </main>
+
+    <p class="footnote">
+      Execution uses CE bid / PE ask (or the reverse). LTP is informational only.
+      Charges are estimates. Nothing is sent to the exchange.
+    </p>
+  </div>
+
+  <aside id="drawer" class="drawer" hidden>
+    <div class="drawer-inner">
+      <header class="drawer-head">
+        <div>
+          <p id="d-symbol" class="d-symbol"></p>
+          <h2 id="d-name"></h2>
+        </div>
+        <button id="drawer-close" type="button" class="icon-btn" aria-label="Close">×</button>
+      </header>
+      <div id="drawer-body"></div>
+    </div>
+  </aside>
+  <div id="backdrop" class="backdrop" hidden></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
