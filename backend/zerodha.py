@@ -72,25 +72,31 @@ class ZerodhaClient:
         instrument_store.save_instruments(rows)
         return rows
 
-    def quotes(self, tokens: list[int]) -> dict[int, dict[str, Any]]:
+    def quotes(self, keys: list[str]) -> dict[str, dict[str, Any]]:
         kite = self._require_session()
-        keyed = [f"{token}" for token in tokens]
-        raw = kite.quote(keyed)
-        out: dict[int, dict[str, Any]] = {}
-        for key, q in raw.items():
-            token = int(str(key).split(":")[-1]) if ":" in str(key) else int(key)
-            depth = q.get("depth") or {}
-            buy = (depth.get("buy") or [{}])[0]
-            sell = (depth.get("sell") or [{}])[0]
-            out[token] = {
-                "last_price": q.get("last_price") or 0,
-                "volume": q.get("volume") or 0,
-                "oi": q.get("oi") or 0,
-                "bid": buy.get("price") or 0,
-                "bid_qty": buy.get("quantity") or 0,
-                "ask": sell.get("price") or 0,
-                "ask_qty": sell.get("quantity") or 0,
-            }
+        out: dict[str, dict[str, Any]] = {}
+        for i in range(0, len(keys), 400):
+            chunk = keys[i : i + 400]
+            raw = kite.quote(chunk)
+            for key, q in raw.items():
+                depth = q.get("depth") or {}
+                buy = (depth.get("buy") or [{}])[0] or {}
+                sell = (depth.get("sell") or [{}])[0] or {}
+                last = q.get("last_price") or 0
+                out[key] = {
+                    "last_price": last,
+                    "ltp": last,
+                    "volume": q.get("volume") or 0,
+                    "oi": q.get("oi") or 0,
+                    "bid": buy.get("price") or 0,
+                    "bid_qty": buy.get("quantity") or 0,
+                    "ask": sell.get("price") or 0,
+                    "ask_qty": sell.get("quantity") or 0,
+                }
+            if i + 400 < len(keys):
+                import time
+
+                time.sleep(0.25)
         return out
 
     def start_ticker(self, tokens: list[int], on_ticks: Callable) -> Any:
