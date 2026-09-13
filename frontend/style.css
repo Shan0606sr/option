@@ -442,6 +442,7 @@ button.logout-btn {
 select.stock-select { width: 220px; }
 
 .results.plan1-table { min-width: 980px; }
+.results.synth-table { min-width: 1180px; }
 
 .results tbody tr.hit { background: var(--green-dim); }
 .results tbody tr.hit:hover { background: #22462e; }

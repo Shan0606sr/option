@@ -343,6 +343,7 @@ function showTab(tab) {
   document.getElementById("panel-index").hidden = tab !== "index";
   document.getElementById("panel-stocks").hidden = tab !== "stocks";
   document.getElementById("panel-plan1").hidden = tab !== "plan1";
+  document.getElementById("panel-synth").hidden = tab !== "synth";
 }
 
 async function consumeKiteRedirect() {
@@ -566,6 +567,11 @@ document.querySelectorAll(".page-tab").forEach((btn) => {
       }
       return;
     }
+    if (btn.dataset.tab === "synth") {
+      if (state.connected && !synthState.started) await startSynthScanner();
+      else refreshSynth();
+      return;
+    }
     if (state.connected && !state.scanned) {
       state.scanned = true;
       await runScan();
@@ -608,6 +614,7 @@ async function logoutZerodha() {
       error: "Logged out. Connect Zerodha again.",
     });
   }
+  stopSynthScanner();
 }
 
 document.getElementById("logout-btn").addEventListener("click", logoutZerodha);
@@ -626,6 +633,14 @@ document.getElementById("plan1-stock").addEventListener("change", () => {
     runPlan1();
   }
 });
+document.getElementById("synth-btn").addEventListener("click", startSynthScanner);
+document.getElementById("synth-log-btn").addEventListener("click", downloadSynthLog);
+["synth-allin", "synth-slip-fut", "synth-slip-opt", "synth-min-net", "synth-allow-ltp"].forEach((id) => {
+  document.getElementById(id).addEventListener("change", refreshSynth);
+});
+document.getElementById("synth-expiry").addEventListener("change", () => {
+  if (state.connected) startSynthScanner();
+});
 document.getElementById("drawer-close").addEventListener("click", closeDrawer);
 document.getElementById("backdrop").addEventListener("click", closeDrawer);
 document.addEventListener("keydown", (event) => {
@@ -642,6 +657,7 @@ window.setInterval(() => {
     if (!document.getElementById("plan1-btn").disabled) runPlan1();
     return;
   }
+  if (state.tab === "synth") return;
   if (document.getElementById("scan-btn").disabled) return;
   runScan();
 }, 120000);

@@ -35,6 +35,7 @@
       <button type="button" class="page-tab active" data-tab="index">Index price</button>
       <button type="button" class="page-tab" data-tab="stocks">Cash vs Future</button>
       <button type="button" class="page-tab" data-tab="plan1">Option plan 1</button>
+      <button type="button" class="page-tab" data-tab="synth">Synthetic futures</button>
     </nav>
 
     <section id="panel-index" class="index-panel">
@@ -154,6 +155,68 @@
         If the synthetic is below LTP, Return % is a loss (negative).
       </p>
     </section>
+
+    <section id="panel-synth" hidden>
+      <section class="controls">
+        <label class="control">
+          <span class="label">Expiry</span>
+          <select id="synth-expiry">
+            <option value="nearest" selected>Nearest</option>
+            <option value="next">Next</option>
+            <option value="all">All upcoming</option>
+          </select>
+        </label>
+        <label class="control">
+          <span class="label">All-in cost ₹/lot</span>
+          <input id="synth-allin" type="number" min="0" step="1" value="80" />
+        </label>
+        <label class="control">
+          <span class="label">Fut slippage pts</span>
+          <input id="synth-slip-fut" type="number" min="0" step="0.05" value="0.50" />
+        </label>
+        <label class="control">
+          <span class="label">Opt slippage pts</span>
+          <input id="synth-slip-opt" type="number" min="0" step="0.05" value="0.05" />
+        </label>
+        <label class="control">
+          <span class="label">Min net ₹/share</span>
+          <input id="synth-min-net" type="number" min="0" step="0.05" value="0" />
+        </label>
+        <label class="check plan1-filter">
+          <input id="synth-allow-ltp" type="checkbox" checked />
+          Allow LTP if bid/ask empty
+        </label>
+        <button id="synth-btn" type="button" class="scan-btn">Start scanner</button>
+        <button id="synth-log-btn" type="button" class="scan-btn logout-btn">Download log</button>
+      </section>
+      <p id="synth-status" class="index-meta">Idle · log <span id="synth-log-count">0</span> rows</p>
+      <main class="table-wrap">
+        <table class="results synth-table">
+          <thead>
+            <tr>
+              <th>Expiry</th>
+              <th class="num">Strike</th>
+              <th>Trade</th>
+              <th class="num">Future</th>
+              <th class="num">Synthetic</th>
+              <th class="num">Gross</th>
+              <th class="num">Cost</th>
+              <th class="num">Net / sh</th>
+              <th class="num">Net / lot</th>
+              <th class="num">Qty</th>
+              <th>Book</th>
+            </tr>
+          </thead>
+          <tbody id="synth-body"></tbody>
+        </table>
+        <p id="synth-empty" class="empty">Start the scanner to stream NIFTY CE/PE vs the matching future.</p>
+      </main>
+      <p class="footnote">
+        Executable synthetic: buy synth = strike + CE ask − PE bid; sell synth = strike + CE bid − PE ask.
+        Compared with the same-expiry NIFTY future (or nearest future if that expiry has no future).
+        Only rows with net edge after all-in cost and slippage are shown. Every calculation is logged for download.
+      </p>
+    </section>
   </div>
 
   <aside id="drawer" class="drawer" hidden>
@@ -170,6 +233,8 @@
   </aside>
   <div id="backdrop" class="backdrop" hidden></div>
 
+  <script src="ticker.js"></script>
+  <script src="synth.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
