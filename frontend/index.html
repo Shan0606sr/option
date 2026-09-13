@@ -36,7 +36,8 @@
       <button type="button" class="page-tab" data-tab="stocks">Cash vs Future</button>
       <button type="button" class="page-tab" data-tab="plan1">Option plan 1</button>
       <button type="button" class="page-tab" data-tab="synth">Synthetic futures</button>
-      <button type="button" class="page-tab" data-tab="callarb">Arbitrage synthetic</button>
+      <button type="button" class="page-tab" data-tab="callarb">Synthetic CE</button>
+      <button type="button" class="page-tab" data-tab="putarb">Synthetic PE</button>
     </nav>
 
     <section id="panel-index" class="index-panel">
@@ -223,7 +224,7 @@
     <section id="panel-callarb" hidden>
       <div class="index-toolbar">
         <div>
-          <h2>Stock Call Arbitrage</h2>
+          <h2>Synthetic CE</h2>
           <p class="index-sub">Actual Call vs same-expiry synthetic Call (Future + Put − Strike). Identification only — no orders are sent.</p>
         </div>
       </div>
@@ -318,9 +319,9 @@
               <th>Stock</th>
               <th>Expiry</th>
               <th class="num">Strike</th>
-              <th class="num">CE</th>
-              <th class="num">PE</th>
-              <th class="num">Future</th>
+              <th class="num">CE (B/S)</th>
+              <th class="num">PE (B/S)</th>
+              <th class="num">Future (B/S)</th>
               <th class="num">Synthetic Call</th>
               <th class="num">Gross Edge</th>
               <th class="num">Charges</th>
@@ -337,7 +338,134 @@
       </main>
       <p class="footnote">
         Strategy A buys the Call at ask and sells the synthetic (Put bid + Future bid − Strike, or the configured discount factor).
-        Strategy B is the reverse. During market hours only WebSocket bid/ask from the same snapshot can become
+        Strategy B is the reverse. Each CE / PE / Future price is tagged <strong>(B)</strong> buy or <strong>(S)</strong> sell for that row.
+        During market hours only WebSocket bid/ask from the same snapshot can become
+        <strong>🟢 CONFIRMED ARBITRAGE</strong>. After hours the book is LTP / theoretical and can never be confirmed.
+        Margin marked * is an estimate until Zerodha basket margin returns. Ranked by return on margin, then net profit.
+        Filters are yours — ₹1,500 is not a built-in threshold.
+      </p>
+    </section>
+
+    <section id="panel-putarb" hidden>
+      <div class="index-toolbar">
+        <div>
+          <h2>Synthetic PE</h2>
+          <p class="index-sub">Actual Put vs same-expiry synthetic Put (Strike + Call − Future). Identification only — no orders are sent.</p>
+        </div>
+      </div>
+      <div id="par-mode" class="synth-mode synth-mode-ltp" role="status">
+        <strong id="par-mode-label">LTP / THEORETICAL</strong>
+        <span id="par-mode-reason">Checking NSE session…</span>
+      </div>
+      <p id="par-method" class="index-meta">Simple: Strike + Call − Future</p>
+      <section class="controls">
+        <label class="control">
+          <span class="label">Expiry</span>
+          <select id="par-expiry">
+            <option value="nearest" selected>Nearest</option>
+            <option value="next">Next</option>
+          </select>
+        </label>
+        <label class="control plan1-filter">
+          <span class="label">Stock</span>
+          <select id="par-stock" class="stock-select">
+            <option value="">All F&amp;O stocks</option>
+          </select>
+        </label>
+        <label class="control">
+          <span class="label">Strike band %</span>
+          <input id="par-band" type="number" min="0" step="0.5" value="6" />
+        </label>
+        <label class="control">
+          <span class="label">Max strikes</span>
+          <input id="par-max-strikes" type="number" min="0" step="1" value="5" />
+        </label>
+        <label class="control">
+          <span class="label">Lots</span>
+          <input id="par-lots" type="number" min="1" step="1" value="1" />
+        </label>
+        <label class="control">
+          <span class="label">Discount factor</span>
+          <input id="par-df" type="number" min="0" max="2" step="0.0001" value="1" />
+        </label>
+        <label class="control">
+          <span class="label">Min net ₹/lot</span>
+          <input id="par-min-net" type="number" min="0" step="1" value="0" />
+        </label>
+        <label class="control">
+          <span class="label">Min RoM %</span>
+          <input id="par-min-rom" type="number" min="0" step="0.01" value="0" />
+        </label>
+        <label class="control">
+          <span class="label">Min edge ₹</span>
+          <input id="par-min-edge" type="number" min="0" step="0.05" value="0" />
+        </label>
+        <label class="control">
+          <span class="label">Find stock</span>
+          <input id="par-filter" type="text" placeholder="BOSCH" />
+        </label>
+        <fieldset class="strategies">
+          <legend class="label">Directions</legend>
+          <label class="check"><input id="par-side-a" type="checkbox" checked /> A · buy Put / sell synthetic</label>
+          <label class="check"><input id="par-side-b" type="checkbox" checked /> B · sell Put / buy synthetic</label>
+          <label class="check"><input id="par-show-no" type="checkbox" /> Show no-arb / incomplete</label>
+        </fieldset>
+        <button id="par-btn" type="button" class="scan-btn">Start scanner</button>
+      </section>
+      <details class="rates-panel">
+        <summary>Zerodha rate card, slippage and liquidity (configuration — not hard-coded in the scanner)</summary>
+        <div class="rates-grid">
+          <label class="control"><span class="label">Fut brokerage %</span><input id="par-fut-brok-pct" type="number" step="0.001" value="0.03" /></label>
+          <label class="control"><span class="label">Fut brokerage cap ₹</span><input id="par-fut-brok-cap" type="number" step="1" value="20" /></label>
+          <label class="control"><span class="label">Fut STT sell %</span><input id="par-fut-stt" type="number" step="0.001" value="0.05" /></label>
+          <label class="control"><span class="label">Fut txn %</span><input id="par-fut-txn" type="number" step="0.00001" value="0.00183" /></label>
+          <label class="control"><span class="label">Fut stamp buy %</span><input id="par-fut-stamp" type="number" step="0.0001" value="0.002" /></label>
+          <label class="control"><span class="label">Opt brokerage ₹</span><input id="par-opt-brok" type="number" step="1" value="20" /></label>
+          <label class="control"><span class="label">Opt STT sell %</span><input id="par-opt-stt" type="number" step="0.01" value="0.15" /></label>
+          <label class="control"><span class="label">Opt exercise STT %</span><input id="par-opt-ex-stt" type="number" step="0.01" value="0.15" /></label>
+          <label class="control"><span class="label">Opt txn %</span><input id="par-opt-txn" type="number" step="0.00001" value="0.03553" /></label>
+          <label class="control"><span class="label">Opt stamp buy %</span><input id="par-opt-stamp" type="number" step="0.0001" value="0.003" /></label>
+          <label class="control"><span class="label">GST %</span><input id="par-gst" type="number" step="0.1" value="18" /></label>
+          <label class="control"><span class="label">SEBI ₹/crore</span><input id="par-sebi" type="number" step="1" value="10" /></label>
+          <label class="control"><span class="label">Slippage ₹/sh</span><input id="par-slip" type="number" step="0.05" value="0.50" /></label>
+          <label class="control"><span class="label">Slippage × spread</span><input id="par-slip-spread" type="number" step="0.05" value="0.25" /></label>
+          <label class="control"><span class="label">Stale quote ms</span><input id="par-stale" type="number" step="100" value="2500" /></label>
+          <label class="control"><span class="label">Snapshot span ms</span><input id="par-snap" type="number" step="100" value="1500" /></label>
+          <label class="control"><span class="label">Max opt spread %</span><input id="par-opt-spread" type="number" step="0.1" value="8" /></label>
+          <label class="control"><span class="label">Max fut spread %</span><input id="par-fut-spread" type="number" step="0.01" value="0.2" /></label>
+          <label class="check rates-check"><input id="par-include-ex" type="checkbox" /> Include bought-and-exercised option STT</label>
+        </div>
+      </details>
+      <p id="par-status" class="index-meta">Idle · scanner does not place orders</p>
+      <main class="table-wrap">
+        <table class="results car-table">
+          <thead>
+            <tr>
+              <th>Stock</th>
+              <th>Expiry</th>
+              <th class="num">Strike</th>
+              <th class="num">CE (B/S)</th>
+              <th class="num">PE (B/S)</th>
+              <th class="num">Future (B/S)</th>
+              <th class="num">Synthetic Put</th>
+              <th class="num">Gross Edge</th>
+              <th class="num">Charges</th>
+              <th class="num">Slippage</th>
+              <th class="num">Net / lot</th>
+              <th class="num">Margin</th>
+              <th class="num">RoM</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="par-body"></tbody>
+        </table>
+        <p id="par-empty" class="empty">Start the scanner to compare executable Puts against same-expiry synthetic Puts for NSE F&amp;O stocks.</p>
+      </main>
+      <p class="footnote">
+        Strategy A buys the Put at ask and sells the synthetic (Strike + Call bid − Future ask, or the configured discount factor).
+        Strategy B is the reverse: sell Put at bid, buy Call at ask, sell Future at bid.
+        Each CE / PE / Future price is tagged <strong>(B)</strong> buy or <strong>(S)</strong> sell for that row.
+        During market hours only WebSocket bid/ask from the same snapshot can become
         <strong>🟢 CONFIRMED ARBITRAGE</strong>. After hours the book is LTP / theoretical and can never be confirmed.
         Margin marked * is an estimate until Zerodha basket margin returns. Ranked by return on margin, then net profit.
         Filters are yours — ₹1,500 is not a built-in threshold.
@@ -364,6 +492,7 @@
   <script src="charges.js"></script>
   <script src="synth.js"></script>
   <script src="call-arb.js"></script>
+  <script src="put-arb.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

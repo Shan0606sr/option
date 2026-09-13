@@ -153,6 +153,11 @@
     return num(put) + (num(future) - num(strike)) * df;
   }
 
+  function syntheticPut(call, future, strike, discountFactor) {
+    const df = num(discountFactor, 1);
+    return num(call) + (num(strike) - num(future)) * df;
+  }
+
   function methodology(discountFactor) {
     const df = num(discountFactor, 1);
     if (Math.abs(df - 1) < 1e-9) {
@@ -169,32 +174,52 @@
     };
   }
 
-  function threeLegCharges({ strategy, callPx, putPx, futPx, strike, qty, rates }) {
+  function putMethodology(discountFactor) {
+    const df = num(discountFactor, 1);
+    if (Math.abs(df - 1) < 1e-9) {
+      return {
+        id: "simple",
+        label: "Simple: Strike + Call − Future",
+        discountFactor: 1,
+      };
+    }
+    return {
+      id: "carry",
+      label: `Carry-adjusted: Call + (Strike − Future) × ${df}`,
+      discountFactor: df,
+    };
+  }
+
+  function threeLegCharges({ strategy, callPx, putPx, futPx, strike, qty, rates, kind }) {
     const r = mergeRates(rates);
     const size = num(qty);
+    const putKind = String(kind || "call").toLowerCase() === "put";
     const a = String(strategy).toUpperCase() !== "B";
+    const buyCall = putKind ? !a : a;
+    const buyPut = putKind ? a : !a;
+    const buyFut = putKind ? a : !a;
     const futureRef = num(futPx);
     const callIntrinsic = Math.max(futureRef - num(strike), 0);
     const putIntrinsic = Math.max(num(strike) - futureRef, 0);
     const call = optionLeg({
       name: "CALL",
-      side: a ? "BUY" : "SELL",
+      side: buyCall ? "BUY" : "SELL",
       premium: callPx,
       qty: size,
-      intrinsic: a ? callIntrinsic : 0,
+      intrinsic: buyCall ? callIntrinsic : 0,
       rates: r,
     });
     const put = optionLeg({
       name: "PUT",
-      side: a ? "SELL" : "BUY",
+      side: buyPut ? "BUY" : "SELL",
       premium: putPx,
       qty: size,
-      intrinsic: a ? 0 : putIntrinsic,
+      intrinsic: buyPut ? putIntrinsic : 0,
       rates: r,
     });
     const fut = futureLeg({
       name: "FUTURE",
-      side: a ? "SELL" : "BUY",
+      side: buyFut ? "BUY" : "SELL",
       price: futPx,
       qty: size,
       rates: r,
@@ -211,20 +236,27 @@
     return num(r.slippageInr) + fromBook;
   }
 
-  function estimateMargins({ strategy, callPx, putPx, futPx, strike, lot, lots }) {
+  function estimateMargins({ strategy, callPx, putPx, futPx, strike, lot, lots, kind }) {
     const qty = num(lot) * num(lots, 1);
     const futNotional = num(futPx) * qty;
     const standaloneFuture = futNotional * 0.12;
-    const short = String(strategy).toUpperCase() !== "B";
-    const standaloneShortPut = short
+    const putKind = String(kind || "call").toLowerCase() === "put";
+    const a = String(strategy).toUpperCase() !== "B";
+    const shortPut = putKind ? !a : a;
+    const standaloneShortPut = shortPut
       ? Math.max(num(putPx) * qty * 3, num(strike) * qty * 0.04)
       : 0;
-    const premiumOutlay = short ? num(callPx) * qty : num(putPx) * qty;
+    const standaloneShortCall = shortPut
+      ? 0
+      : Math.max(num(callPx) * qty * 3, num(strike) * qty * 0.04);
+    const premiumOutlay = shortPut ? num(callPx) * qty : num(putPx) * qty;
     const combined = premiumOutlay + futNotional * 0.05;
-    const benefit = Math.max(0, standaloneFuture + standaloneShortPut - combined);
+    const extraShort = putKind ? standaloneShortCall : 0;
+    const benefit = Math.max(0, standaloneFuture + standaloneShortPut + extraShort - combined);
     return {
       standaloneFuture: round2(standaloneFuture),
       standaloneShortPut: round2(standaloneShortPut),
+      standaloneShortCall: round2(standaloneShortCall),
       combined: round2(combined),
       benefit: round2(benefit),
       required: round2(combined),
@@ -240,7 +272,9 @@
     futureLeg,
     threeLegCharges,
     syntheticCall,
+    syntheticPut,
     methodology,
+    putMethodology,
     slippagePerShare,
     estimateMargins,
     sebiCharge,

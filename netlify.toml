@@ -14,6 +14,9 @@
 [functions.call-arb]
   timeout = 26
 
+[functions.put-arb]
+  timeout = 26
+
 [functions.margins]
   timeout = 20
 
@@ -80,6 +83,11 @@
 [[redirects]]
   from = "/api/call-arb"
   to = "/.netlify/functions/call-arb"
+  status = 200
+
+[[redirects]]
+  from = "/api/put-arb"
+  to = "/.netlify/functions/put-arb"
   status = 200
 
 [[redirects]]

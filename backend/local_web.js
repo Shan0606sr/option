@@ -53,6 +53,7 @@ const API = {
   "/api/synth": "synth",
   "/api/ticker": "ticker",
   "/api/call-arb": "call-arb",
+  "/api/put-arb": "put-arb",
   "/api/margins": "margins",
 };
 
@@ -168,5 +169,5 @@ server.on("error", (error) => {
 server.listen(PORT, HOST, () => {
   console.log(`Local Option Parity at http://${HOST}:${PORT}/`);
   console.log("Connect Zerodha on this page. After login Kite returns here with request_token.");
-  console.log("Arbitrage synthetic tab is ready. No orders are sent.");
+  console.log("Synthetic CE tab is ready. No orders are sent.");
 });

@@ -60,6 +60,7 @@ exports.handler = async (event) => {
     }
     const standaloneFuture = (standalone.find((row) => /FUT/i.test(row.tradingsymbol)) || {}).required || 0;
     const standaloneShortPut = (standalone.find((row) => row.transaction_type === "SELL" && /PE$/i.test(row.tradingsymbol)) || {}).required || 0;
+    const standaloneShortCall = (standalone.find((row) => row.transaction_type === "SELL" && /CE$/i.test(row.tradingsymbol)) || {}).required || 0;
     return json(200, {
       uncertain: !(required > 0),
       source: required > 0 ? "kite" : "kite-empty",
@@ -67,7 +68,8 @@ exports.handler = async (event) => {
       combined: required,
       standaloneFuture,
       standaloneShortPut,
-      benefit: Math.max(0, standaloneFuture + standaloneShortPut - required),
+      standaloneShortCall,
+      benefit: Math.max(0, standaloneFuture + standaloneShortPut + standaloneShortCall - required),
       standalone,
     });
   } catch (error) {

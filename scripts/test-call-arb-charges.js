@@ -65,4 +65,43 @@ console.log(JSON.stringify({
 const kept = pickStrikes([47000, 48000, 48500, 49000, 50000, 52000], 48715, 6, 5);
 if (!kept.includes(49000)) throw new Error(`ATM band must keep 49000, got ${kept}`);
 
+const putA = charges.syntheticPut(50, 1383, 1340, 1);
+assertClose(putA, 7, "A synthetic Put sell = Strike + CE bid − Future ask");
+assertClose(putA - 5, 2, "A gross = synthetic Put − PE ask");
+
+const putB = charges.syntheticPut(55, 1383, 1340, 1);
+assertClose(putB, 12, "B synthetic Put buy = Strike + CE ask − Future bid");
+assertClose(15 - putB, 3, "B gross = PE bid − synthetic Put");
+
+const putBillA = charges.threeLegCharges({
+  strategy: "A",
+  kind: "put",
+  callPx: 50,
+  putPx: 5,
+  futPx: 1383,
+  strike: 1340,
+  qty: 1,
+  rates: charges.DEFAULT_RATES,
+});
+if (putBillA.legs[0].side !== "SELL" || putBillA.legs[1].side !== "BUY" || putBillA.legs[2].side !== "BUY") {
+  throw new Error(`put A legs should be SELL CE / BUY PE / BUY FUT, got ${putBillA.legs.map((leg) => `${leg.side} ${leg.name}`).join(", ")}`);
+}
+
+const putBillB = charges.threeLegCharges({
+  strategy: "B",
+  kind: "put",
+  callPx: 55,
+  putPx: 15,
+  futPx: 1383,
+  strike: 1340,
+  qty: 1,
+  rates: charges.DEFAULT_RATES,
+});
+if (putBillB.legs[0].side !== "BUY" || putBillB.legs[1].side !== "SELL" || putBillB.legs[2].side !== "SELL") {
+  throw new Error(`put B legs should be BUY CE / SELL PE / SELL FUT, got ${putBillB.legs.map((leg) => `${leg.side} ${leg.name}`).join(", ")}`);
+}
+
+if (charges.putMethodology(1).id !== "simple") throw new Error("put df=1 must be simple methodology");
+
 console.log("call-arb charges: BOSCH identity and rate-card engine OK");
+console.log("put-arb charges: Strike + Call − Future identities and A/B legs OK");

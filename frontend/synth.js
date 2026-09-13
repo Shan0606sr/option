@@ -312,6 +312,7 @@ async function startSynthScanner() {
     return;
   }
   if (typeof stopCallArbScanner === "function") stopCallArbScanner();
+  if (typeof stopPutArbScanner === "function") stopPutArbScanner();
   const expiry = document.getElementById("synth-expiry").value || "nearest";
   const btn = document.getElementById("synth-btn");
   btn.disabled = true;

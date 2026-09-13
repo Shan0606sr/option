@@ -346,6 +346,7 @@ function showTab(tab) {
   document.getElementById("panel-plan1").hidden = tab !== "plan1";
   document.getElementById("panel-synth").hidden = tab !== "synth";
   document.getElementById("panel-callarb").hidden = tab !== "callarb";
+  document.getElementById("panel-putarb").hidden = tab !== "putarb";
 }
 
 async function consumeKiteRedirect() {
@@ -579,6 +580,11 @@ document.querySelectorAll(".page-tab").forEach((btn) => {
       else refreshCallArb();
       return;
     }
+    if (btn.dataset.tab === "putarb") {
+      if (state.connected && !parState.started) await startPutArbScanner();
+      else refreshPutArb();
+      return;
+    }
     if (state.connected && !state.scanned) {
       state.scanned = true;
       await runScan();
@@ -623,6 +629,7 @@ async function logoutZerodha() {
   }
   stopSynthScanner();
   stopCallArbScanner();
+  stopPutArbScanner();
 }
 
 document.getElementById("logout-btn").addEventListener("click", logoutZerodha);
@@ -644,12 +651,20 @@ document.getElementById("plan1-stock").addEventListener("change", () => {
 document.getElementById("synth-btn").addEventListener("click", startSynthScanner);
 document.getElementById("synth-log-btn").addEventListener("click", downloadSynthLog);
 document.getElementById("car-btn").addEventListener("click", startCallArbScanner);
+document.getElementById("par-btn").addEventListener("click", startPutArbScanner);
 [
   "car-min-net", "car-min-rom", "car-min-edge", "car-filter", "car-lots", "car-df",
   "car-slip", "car-slip-spread", "car-side-a", "car-side-b", "car-show-no",
 ].forEach((id) => {
   const el = document.getElementById(id);
   if (el) el.addEventListener("input", refreshCallArb);
+});
+[
+  "par-min-net", "par-min-rom", "par-min-edge", "par-filter", "par-lots", "par-df",
+  "par-slip", "par-slip-spread", "par-side-a", "par-side-b", "par-show-no",
+].forEach((id) => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener("input", refreshPutArb);
 });
 document.querySelectorAll("#panel-callarb input, #panel-callarb select").forEach((el) => {
   el.addEventListener("change", () => {
@@ -659,6 +674,16 @@ document.querySelectorAll("#panel-callarb input, #panel-callarb select").forEach
       return;
     }
     refreshCallArb();
+  });
+});
+document.querySelectorAll("#panel-putarb input, #panel-putarb select").forEach((el) => {
+  el.addEventListener("change", () => {
+    persistPutArbRates();
+    if (el.id === "par-expiry" || el.id === "par-stock" || el.id === "par-band" || el.id === "par-max-strikes") {
+      if (state.connected) startPutArbScanner();
+      return;
+    }
+    refreshPutArb();
   });
 });
 ["synth-allin", "synth-slip-fut", "synth-slip-opt", "synth-min-net"].forEach((id) => {
@@ -683,7 +708,7 @@ window.setInterval(() => {
     if (!document.getElementById("plan1-btn").disabled) runPlan1();
     return;
   }
-  if (state.tab === "synth" || state.tab === "callarb") return;
+  if (state.tab === "synth" || state.tab === "callarb" || state.tab === "putarb") return;
   if (document.getElementById("scan-btn").disabled) return;
   runScan();
 }, 120000);
