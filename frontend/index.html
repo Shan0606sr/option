@@ -157,6 +157,10 @@
     </section>
 
     <section id="panel-synth" hidden>
+      <div id="synth-mode" class="synth-mode synth-mode-ltp" role="status">
+        <strong id="synth-mode-label">LTP / THEORETICAL</strong>
+        <span id="synth-mode-reason">Checking NIFTY session…</span>
+      </div>
       <section class="controls">
         <label class="control">
           <span class="label">Expiry</span>
@@ -181,10 +185,6 @@
         <label class="control">
           <span class="label">Min net ₹/share</span>
           <input id="synth-min-net" type="number" min="0" step="0.05" value="0" />
-        </label>
-        <label class="check plan1-filter">
-          <input id="synth-allow-ltp" type="checkbox" checked />
-          Allow LTP if bid/ask empty
         </label>
         <button id="synth-btn" type="button" class="scan-btn">Start scanner</button>
         <button id="synth-log-btn" type="button" class="scan-btn logout-btn">Download log</button>
@@ -214,7 +214,8 @@
       <p class="footnote">
         Executable synthetic: buy synth = strike + CE ask − PE bid; sell synth = strike + CE bid − PE ask.
         Compared with the same-expiry NIFTY future (or nearest future if that expiry has no future).
-        Only rows with net edge after all-in cost and slippage are shown. Every calculation is logged for download.
+        During market hours only live bid/ask is used (LIVE / EXECUTABLE). Missing bid or ask is skipped, never replaced with LTP.
+        Outside hours, latest LTP is used for testing (LTP / THEORETICAL) and is never treated as executable. Session follows the NSE holiday calendar and Muhurat.
       </p>
     </section>
   </div>
@@ -233,6 +234,7 @@
   </aside>
   <div id="backdrop" class="backdrop" hidden></div>
 
+  <script src="nse-session.js"></script>
   <script src="ticker.js"></script>
   <script src="synth.js"></script>
   <script src="app.js"></script>

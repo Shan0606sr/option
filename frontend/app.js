@@ -635,7 +635,7 @@ document.getElementById("plan1-stock").addEventListener("change", () => {
 });
 document.getElementById("synth-btn").addEventListener("click", startSynthScanner);
 document.getElementById("synth-log-btn").addEventListener("click", downloadSynthLog);
-["synth-allin", "synth-slip-fut", "synth-slip-opt", "synth-min-net", "synth-allow-ltp"].forEach((id) => {
+["synth-allin", "synth-slip-fut", "synth-slip-opt", "synth-min-net"].forEach((id) => {
   document.getElementById(id).addEventListener("change", refreshSynth);
 });
 document.getElementById("synth-expiry").addEventListener("change", () => {

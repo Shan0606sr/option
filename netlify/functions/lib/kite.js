@@ -362,21 +362,7 @@ function readAccessCookie(cookieHeader) {
   return match ? decodeURIComponent(match[1]) : "";
 }
 
-function marketOpen(now = new Date()) {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Asia/Kolkata",
-    weekday: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(now);
-  const weekday = parts.find((p) => p.type === "weekday").value;
-  const hour = Number(parts.find((p) => p.type === "hour").value);
-  const minute = Number(parts.find((p) => p.type === "minute").value);
-  if (weekday === "Sat" || weekday === "Sun") return false;
-  const mins = hour * 60 + minute;
-  return mins >= 9 * 60 + 15 && mins <= 15 * 60 + 30;
-}
+const { marketOpen, nseSession } = require("./nse-session");
 
 module.exports = {
   apiKey,
@@ -395,4 +381,5 @@ module.exports = {
   clearAccessCookie,
   readAccessCookie,
   marketOpen,
+  nseSession,
 };

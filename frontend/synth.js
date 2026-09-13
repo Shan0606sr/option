@@ -26,12 +26,25 @@ function synthBook(token) {
   return synthState.books[String(token)] || { ltp: 0, bid: 0, ask: 0, bid_qty: 0, ask_qty: 0 };
 }
 
-function execPx(book, side, allowLtp) {
-  const live = Number(book[side] || 0);
-  if (live > 0) return { price: live, qty: Number(book[`${side}_qty`] || 0), usedLtp: false };
+function execPx(book, side, session) {
+  if (session.live) {
+    const live = Number(book[side] || 0);
+    if (live > 0) return { price: live, qty: Number(book[`${side}_qty`] || 0), usedLtp: false, missing: false };
+    return { price: 0, qty: 0, usedLtp: false, missing: true };
+  }
   const ltp = Number(book.ltp || 0);
-  if (allowLtp && ltp > 0) return { price: ltp, qty: 0, usedLtp: true };
-  return { price: 0, qty: 0, usedLtp: false };
+  if (ltp > 0) return { price: ltp, qty: 0, usedLtp: true, missing: false };
+  return { price: 0, qty: 0, usedLtp: true, missing: true };
+}
+
+function paintSynthMode(session) {
+  const box = document.getElementById("synth-mode");
+  const label = document.getElementById("synth-mode-label");
+  const reason = document.getElementById("synth-mode-reason");
+  if (!box) return;
+  box.className = `synth-mode ${session.live ? "synth-mode-live" : "synth-mode-ltp"}`;
+  label.textContent = session.live ? "🟢 LIVE / EXECUTABLE" : "🟡 LTP / THEORETICAL";
+  reason.textContent = session.reason;
 }
 
 function readSynthLog() {
@@ -55,7 +68,7 @@ function downloadSynthLog() {
   const rows = readSynthLog();
   const header = [
     "ts", "expiry", "strike", "side", "fut_bid", "fut_ask", "ce_bid", "ce_ask", "pe_bid", "pe_ask",
-    "synth", "future", "gross", "cost", "net", "net_lot", "used_ltp", "shown",
+    "synth", "future", "gross", "cost", "net", "net_lot", "mode", "executable", "used_ltp", "shown",
   ];
   const lines = [header.join(",")].concat(rows.map((row) => header.map((key) => row[key] ?? "").join(",")));
   const blob = new Blob([lines.join("\n")], { type: "text/csv" });
@@ -68,7 +81,8 @@ function downloadSynthLog() {
 }
 
 function evaluateSynth() {
-  const allowLtp = document.getElementById("synth-allow-ltp").checked;
+  const session = nseSession();
+  paintSynthMode(session);
   const minNet = synthNum("synth-min-net", 0);
   const rows = [];
   const logs = [];
@@ -84,18 +98,18 @@ function evaluateSynth() {
     const legs = {
       buySynth: {
         side: "Buy synth / sell fut",
-        ce: execPx(ce, "ask", allowLtp),
-        pe: execPx(pe, "bid", allowLtp),
-        fut: execPx(fut, "bid", allowLtp),
+        ce: execPx(ce, "ask", session),
+        pe: execPx(pe, "bid", session),
+        fut: execPx(fut, "bid", session),
         synth: (cePx, pePx) => pair.strike + cePx - pePx,
         future: (futPx) => futPx,
         gross: (synth, future) => future - synth,
       },
       sellSynth: {
         side: "Sell synth / buy fut",
-        ce: execPx(ce, "bid", allowLtp),
-        pe: execPx(pe, "ask", allowLtp),
-        fut: execPx(fut, "ask", allowLtp),
+        ce: execPx(ce, "bid", session),
+        pe: execPx(pe, "ask", session),
+        fut: execPx(fut, "ask", session),
         synth: (cePx, pePx) => pair.strike + cePx - pePx,
         future: (futPx) => futPx,
         gross: (synth, future) => synth - future,
@@ -103,14 +117,16 @@ function evaluateSynth() {
     };
 
     for (const spec of Object.values(legs)) {
-      const ready = spec.ce.price && spec.pe.price && spec.fut.price;
+      const missing = spec.ce.missing || spec.pe.missing || spec.fut.missing;
+      const ready = !missing && spec.ce.price && spec.pe.price && spec.fut.price;
       const synthPx = ready ? spec.synth(spec.ce.price, spec.pe.price) : 0;
       const futPx = ready ? spec.future(spec.fut.price) : 0;
       const gross = ready ? spec.gross(synthPx, futPx) : 0;
       const net = ready ? gross - cost.perShare : 0;
-      const usedLtp = spec.ce.usedLtp || spec.pe.usedLtp || spec.fut.usedLtp;
+      const usedLtp = !session.live;
+      const executable = Boolean(session.live && ready);
       const shown = Boolean(ready && net > minNet);
-      const qty = ready ? Math.min(lot, spec.ce.qty || lot, spec.pe.qty || lot, spec.fut.qty || lot) : 0;
+      const qty = executable ? Math.min(lot, spec.ce.qty || 0, spec.pe.qty || 0, spec.fut.qty || 0) : 0;
       logs.push({
         ts: now,
         expiry: pair.expiry,
@@ -128,6 +144,8 @@ function evaluateSynth() {
         cost: cost.perShare,
         net,
         net_lot: net * lot,
+        mode: session.mode,
+        executable,
         used_ltp: usedLtp,
         shown,
       });
@@ -143,6 +161,8 @@ function evaluateSynth() {
         net_lot: net * lot,
         qty,
         usedLtp,
+        executable,
+        mode: session.mode,
         ce: spec.ce.price,
         pe: spec.pe.price,
       });
@@ -163,14 +183,16 @@ function renderSynthRows(rows) {
   if (!rows.length) {
     empty.classList.remove("hidden");
     empty.textContent = synthState.pairs.length
-      ? "No positive net edge after costs. Bid/ask may be empty until the market opens."
+      ? (nseSession().live
+        ? "No LIVE / EXECUTABLE quote. Missing bid or ask is skipped — LTP is not used in session."
+        : "No theoretical LTP edge after costs. These after-hours rows are never executable.")
       : "Connect Zerodha, then start the NIFTY scanner.";
     return;
   }
   empty.classList.add("hidden");
   for (const row of rows) {
     const tr = document.createElement("tr");
-    tr.className = "hit";
+    tr.className = row.executable ? "hit" : "theo";
     tr.innerHTML = `
       <td>${row.expiry ? fmtExpiry(row.expiry) : "—"}</td>
       <td class="num">${inr(row.strike, 0)}</td>
@@ -181,8 +203,8 @@ function renderSynthRows(rows) {
       <td class="num">${inr(row.cost)}</td>
       <td class="num signal-yes">${row.net > 0 ? "+" : ""}${inr(row.net)}</td>
       <td class="num signal-yes">${row.net_lot > 0 ? "+" : ""}${inr(row.net_lot)}</td>
-      <td class="num">${row.qty || "—"}</td>
-      <td class="signal-no">${row.usedLtp ? "LTP" : "BID/ASK"}</td>
+      <td class="num">${row.executable ? (row.qty || "—") : "—"}</td>
+      <td class="${row.executable ? "signal-yes" : "signal-no"}">${row.executable ? "LIVE / EXECUTABLE" : "LTP / THEORETICAL"}</td>
     `;
     body.appendChild(tr);
   }
@@ -269,6 +291,10 @@ function stopSynthScanner() {
   synthState.started = false;
   setSynthStatus("Stopped");
 }
+
+window.setInterval(() => {
+  if (typeof state !== "undefined" && state.tab === "synth") refreshSynth();
+}, 30000);
 
 window.startSynthScanner = startSynthScanner;
 window.stopSynthScanner = stopSynthScanner;
