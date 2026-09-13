@@ -36,6 +36,7 @@
       <button type="button" class="page-tab" data-tab="stocks">Cash vs Future</button>
       <button type="button" class="page-tab" data-tab="plan1">Option plan 1</button>
       <button type="button" class="page-tab" data-tab="synth">Synthetic futures</button>
+      <button type="button" class="page-tab" data-tab="callarb">Arbitrage synthetic</button>
     </nav>
 
     <section id="panel-index" class="index-panel">
@@ -218,6 +219,130 @@
         Outside hours, a pair needs CE LTP, PE LTP and future LTP. If any LTP is missing, the row is NO DATA (bid/ask and stale close are not used).
       </p>
     </section>
+
+    <section id="panel-callarb" hidden>
+      <div class="index-toolbar">
+        <div>
+          <h2>Stock Call Arbitrage</h2>
+          <p class="index-sub">Actual Call vs same-expiry synthetic Call (Future + Put − Strike). Identification only — no orders are sent.</p>
+        </div>
+      </div>
+      <div id="car-mode" class="synth-mode synth-mode-ltp" role="status">
+        <strong id="car-mode-label">LTP / THEORETICAL</strong>
+        <span id="car-mode-reason">Checking NSE session…</span>
+      </div>
+      <p id="car-method" class="index-meta">Simple: Future + Put − Strike</p>
+      <section class="controls">
+        <label class="control">
+          <span class="label">Expiry</span>
+          <select id="car-expiry">
+            <option value="nearest" selected>Nearest</option>
+            <option value="next">Next</option>
+          </select>
+        </label>
+        <label class="control plan1-filter">
+          <span class="label">Stock</span>
+          <select id="car-stock" class="stock-select">
+            <option value="">All F&O stocks</option>
+          </select>
+        </label>
+        <label class="control">
+          <span class="label">Strike band %</span>
+          <input id="car-band" type="number" min="0" step="0.5" value="6" />
+        </label>
+        <label class="control">
+          <span class="label">Max strikes</span>
+          <input id="car-max-strikes" type="number" min="0" step="1" value="5" />
+        </label>
+        <label class="control">
+          <span class="label">Lots</span>
+          <input id="car-lots" type="number" min="1" step="1" value="1" />
+        </label>
+        <label class="control">
+          <span class="label">Discount factor</span>
+          <input id="car-df" type="number" min="0" max="2" step="0.0001" value="1" />
+        </label>
+        <label class="control">
+          <span class="label">Min net ₹/lot</span>
+          <input id="car-min-net" type="number" min="0" step="1" value="0" />
+        </label>
+        <label class="control">
+          <span class="label">Min RoM %</span>
+          <input id="car-min-rom" type="number" min="0" step="0.01" value="0" />
+        </label>
+        <label class="control">
+          <span class="label">Min edge ₹</span>
+          <input id="car-min-edge" type="number" min="0" step="0.05" value="0" />
+        </label>
+        <label class="control">
+          <span class="label">Find stock</span>
+          <input id="car-filter" type="text" placeholder="BOSCH" />
+        </label>
+        <fieldset class="strategies">
+          <legend class="label">Directions</legend>
+          <label class="check"><input id="car-side-a" type="checkbox" checked /> A · buy Call / sell synthetic</label>
+          <label class="check"><input id="car-side-b" type="checkbox" checked /> B · sell Call / buy synthetic</label>
+          <label class="check"><input id="car-show-no" type="checkbox" /> Show no-arb / incomplete</label>
+        </fieldset>
+        <button id="car-btn" type="button" class="scan-btn">Start scanner</button>
+      </section>
+      <details class="rates-panel">
+        <summary>Zerodha rate card, slippage and liquidity (configuration — not hard-coded in the scanner)</summary>
+        <div class="rates-grid">
+          <label class="control"><span class="label">Fut brokerage %</span><input id="car-fut-brok-pct" type="number" step="0.001" value="0.03" /></label>
+          <label class="control"><span class="label">Fut brokerage cap ₹</span><input id="car-fut-brok-cap" type="number" step="1" value="20" /></label>
+          <label class="control"><span class="label">Fut STT sell %</span><input id="car-fut-stt" type="number" step="0.001" value="0.05" /></label>
+          <label class="control"><span class="label">Fut txn %</span><input id="car-fut-txn" type="number" step="0.00001" value="0.00183" /></label>
+          <label class="control"><span class="label">Fut stamp buy %</span><input id="car-fut-stamp" type="number" step="0.0001" value="0.002" /></label>
+          <label class="control"><span class="label">Opt brokerage ₹</span><input id="car-opt-brok" type="number" step="1" value="20" /></label>
+          <label class="control"><span class="label">Opt STT sell %</span><input id="car-opt-stt" type="number" step="0.01" value="0.15" /></label>
+          <label class="control"><span class="label">Opt exercise STT %</span><input id="car-opt-ex-stt" type="number" step="0.01" value="0.15" /></label>
+          <label class="control"><span class="label">Opt txn %</span><input id="car-opt-txn" type="number" step="0.00001" value="0.03553" /></label>
+          <label class="control"><span class="label">Opt stamp buy %</span><input id="car-opt-stamp" type="number" step="0.0001" value="0.003" /></label>
+          <label class="control"><span class="label">GST %</span><input id="car-gst" type="number" step="0.1" value="18" /></label>
+          <label class="control"><span class="label">SEBI ₹/crore</span><input id="car-sebi" type="number" step="1" value="10" /></label>
+          <label class="control"><span class="label">Slippage ₹/sh</span><input id="car-slip" type="number" step="0.05" value="0.50" /></label>
+          <label class="control"><span class="label">Slippage × spread</span><input id="car-slip-spread" type="number" step="0.05" value="0.25" /></label>
+          <label class="control"><span class="label">Stale quote ms</span><input id="car-stale" type="number" step="100" value="2500" /></label>
+          <label class="control"><span class="label">Snapshot span ms</span><input id="car-snap" type="number" step="100" value="1500" /></label>
+          <label class="control"><span class="label">Max opt spread %</span><input id="car-opt-spread" type="number" step="0.1" value="8" /></label>
+          <label class="control"><span class="label">Max fut spread %</span><input id="car-fut-spread" type="number" step="0.01" value="0.2" /></label>
+          <label class="check rates-check"><input id="car-include-ex" type="checkbox" /> Include bought-and-exercised option STT</label>
+        </div>
+      </details>
+      <p id="car-status" class="index-meta">Idle · scanner does not place orders</p>
+      <main class="table-wrap">
+        <table class="results car-table">
+          <thead>
+            <tr>
+              <th>Stock</th>
+              <th>Expiry</th>
+              <th class="num">Strike</th>
+              <th class="num">CE</th>
+              <th class="num">PE</th>
+              <th class="num">Future</th>
+              <th class="num">Synthetic Call</th>
+              <th class="num">Gross Edge</th>
+              <th class="num">Charges</th>
+              <th class="num">Slippage</th>
+              <th class="num">Net / lot</th>
+              <th class="num">Margin</th>
+              <th class="num">RoM</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="car-body"></tbody>
+        </table>
+        <p id="car-empty" class="empty">Start the scanner to compare executable Calls against same-expiry synthetic Calls for NSE F&amp;O stocks.</p>
+      </main>
+      <p class="footnote">
+        Strategy A buys the Call at ask and sells the synthetic (Put bid + Future bid − Strike, or the configured discount factor).
+        Strategy B is the reverse. During market hours only WebSocket bid/ask from the same snapshot can become
+        <strong>🟢 CONFIRMED ARBITRAGE</strong>. After hours the book is LTP / theoretical and can never be confirmed.
+        Margin marked * is an estimate until Zerodha basket margin returns. Ranked by return on margin, then net profit.
+        Filters are yours — ₹1,500 is not a built-in threshold.
+      </p>
+    </section>
   </div>
 
   <aside id="drawer" class="drawer" hidden>
@@ -236,7 +361,9 @@
 
   <script src="nse-session.js"></script>
   <script src="ticker.js"></script>
+  <script src="charges.js"></script>
   <script src="synth.js"></script>
+  <script src="call-arb.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

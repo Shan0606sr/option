@@ -30,6 +30,8 @@ function parsePacket(buffer) {
     bid_qty: 0,
     ask_qty: 0,
   };
+  tick.bid_depth = 0;
+  tick.ask_depth = 0;
   if (len === 184) {
     const bids = parseDepthSide(view, 64, divisor);
     const asks = parseDepthSide(view, 124, divisor);
@@ -37,7 +39,10 @@ function parsePacket(buffer) {
     tick.ask = (asks[0] && asks[0].price) || 0;
     tick.bid_qty = (bids[0] && bids[0].qty) || 0;
     tick.ask_qty = (asks[0] && asks[0].qty) || 0;
+    tick.bid_depth = bids.reduce((sum, level) => sum + (level.qty || 0), 0);
+    tick.ask_depth = asks.reduce((sum, level) => sum + (level.qty || 0), 0);
   }
+  tick.ts = Date.now();
   return tick;
 }
 

@@ -113,6 +113,7 @@ h1 {
 
 .page-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 0;
   margin: 18px 0 0;
   border: 1px solid var(--line);
@@ -443,6 +444,36 @@ select.stock-select { width: 220px; }
 
 .results.plan1-table { min-width: 980px; }
 .results.synth-table { min-width: 1180px; }
+.results.car-table { min-width: 1480px; }
+
+.drawer.wide { width: min(560px, 100%); }
+
+.rates-panel {
+  margin: 8px 0 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  background: var(--bg-2);
+}
+
+.rates-panel summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.rates-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px 16px;
+  margin-top: 14px;
+}
+
+.rates-check {
+  grid-column: 1 / -1;
+  margin-top: 4px;
+}
 
 .synth-mode {
   margin: 18px 0 0;

@@ -11,6 +11,12 @@
 [functions.plan1]
   timeout = 26
 
+[functions.call-arb]
+  timeout = 26
+
+[functions.margins]
+  timeout = 20
+
 [[redirects]]
   from = "/api/login"
   to = "/.netlify/functions/login"
@@ -69,4 +75,14 @@
 [[redirects]]
   from = "/api/ticker"
   to = "/.netlify/functions/ticker"
+  status = 200
+
+[[redirects]]
+  from = "/api/call-arb"
+  to = "/.netlify/functions/call-arb"
+  status = 200
+
+[[redirects]]
+  from = "/api/margins"
+  to = "/.netlify/functions/margins"
   status = 200

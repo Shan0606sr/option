@@ -7,7 +7,7 @@ This process must be running before you click Connect Zerodha.
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlparse
 
-NETLIFY = "https://celebrated-sunflower-7709a2.netlify.app/"
+NETLIFY = "https://celebrated-sunflower-7709a2.netlify.app/.netlify/functions/callback"
 
 
 class Handler(BaseHTTPRequestHandler):

@@ -68,6 +68,27 @@ async function kiteGet(path, accessToken) {
   return res;
 }
 
+async function kitePost(path, accessToken, body, contentType = "application/json") {
+  const payload = contentType === "application/json" ? JSON.stringify(body) : body;
+  const res = await fetch(`https://api.kite.trade${path}`, {
+    method: "POST",
+    headers: {
+      "X-Kite-Version": "3",
+      Authorization: authHeader(accessToken),
+      "Content-Type": contentType,
+    },
+    body: payload,
+  });
+  const text = await res.text();
+  let json = {};
+  try { json = JSON.parse(text); } catch (_err) { json = { raw: text }; }
+  if (!res.ok) {
+    const route = path.split("?")[0];
+    throw new Error(json.message || `Kite ${route} failed: ${res.status} ${text.slice(0, 160)}`);
+  }
+  return json;
+}
+
 function splitCsvLine(line) {
   const cols = [];
   let cur = "";
@@ -126,10 +147,14 @@ async function loadInstruments(accessToken) {
 
 function parseQuote(q) {
   const depth = q.depth || {};
-  const buy = (depth.buy || [])[0] || {};
-  const sell = (depth.sell || [])[0] || {};
+  const buys = depth.buy || [];
+  const sells = depth.sell || [];
+  const buy = buys[0] || {};
+  const sell = sells[0] || {};
   const last = Number(q.last_price || 0);
   const close = Number((q.ohlc || {}).close || 0);
+  const bidDepth = buys.reduce((sum, level) => sum + Number(level.quantity || 0), 0);
+  const askDepth = sells.reduce((sum, level) => sum + Number(level.quantity || 0), 0);
   return {
     last_price: last,
     ltp: last,
@@ -140,6 +165,8 @@ function parseQuote(q) {
     bid_qty: buy.quantity || 0,
     ask: sell.price || 0,
     ask_qty: sell.quantity || 0,
+    bid_depth: bidDepth || Number(buy.quantity || 0),
+    ask_depth: askDepth || Number(sell.quantity || 0),
     instrument_token: q.instrument_token,
   };
 }
@@ -334,26 +361,18 @@ function isIndex(name) {
   return INDEX_NAMES.has(String(name || "").toUpperCase());
 }
 
+function cookieParts() {
+  const parts = ["Path=/", "HttpOnly", "SameSite=Lax"];
+  if (process.env.LOCAL_WEB !== "1") parts.push("Secure");
+  return parts;
+}
+
 function accessCookie(token) {
-  return [
-    `kite_access=${encodeURIComponent(token)}`,
-    "Path=/",
-    "HttpOnly",
-    "Secure",
-    "SameSite=Lax",
-    `Max-Age=${20 * 60 * 60}`,
-  ].join("; ");
+  return [`kite_access=${encodeURIComponent(token)}`, ...cookieParts(), `Max-Age=${20 * 60 * 60}`].join("; ");
 }
 
 function clearAccessCookie() {
-  return [
-    "kite_access=",
-    "Path=/",
-    "HttpOnly",
-    "Secure",
-    "SameSite=Lax",
-    "Max-Age=0",
-  ].join("; ");
+  return ["kite_access=", ...cookieParts(), "Max-Age=0"].join("; ");
 }
 
 function readAccessCookie(cookieHeader) {
@@ -382,4 +401,5 @@ module.exports = {
   readAccessCookie,
   marketOpen,
   nseSession,
+  kitePost,
 };

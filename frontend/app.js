@@ -189,6 +189,7 @@ function openDrawer(row) {
 
 function closeDrawer() {
   document.getElementById("drawer").hidden = true;
+  document.getElementById("drawer").classList.remove("wide");
   document.getElementById("backdrop").hidden = true;
 }
 
@@ -344,6 +345,7 @@ function showTab(tab) {
   document.getElementById("panel-stocks").hidden = tab !== "stocks";
   document.getElementById("panel-plan1").hidden = tab !== "plan1";
   document.getElementById("panel-synth").hidden = tab !== "synth";
+  document.getElementById("panel-callarb").hidden = tab !== "callarb";
 }
 
 async function consumeKiteRedirect() {
@@ -572,6 +574,11 @@ document.querySelectorAll(".page-tab").forEach((btn) => {
       else refreshSynth();
       return;
     }
+    if (btn.dataset.tab === "callarb") {
+      if (state.connected && !carState.started) await startCallArbScanner();
+      else refreshCallArb();
+      return;
+    }
     if (state.connected && !state.scanned) {
       state.scanned = true;
       await runScan();
@@ -615,6 +622,7 @@ async function logoutZerodha() {
     });
   }
   stopSynthScanner();
+  stopCallArbScanner();
 }
 
 document.getElementById("logout-btn").addEventListener("click", logoutZerodha);
@@ -635,6 +643,24 @@ document.getElementById("plan1-stock").addEventListener("change", () => {
 });
 document.getElementById("synth-btn").addEventListener("click", startSynthScanner);
 document.getElementById("synth-log-btn").addEventListener("click", downloadSynthLog);
+document.getElementById("car-btn").addEventListener("click", startCallArbScanner);
+[
+  "car-min-net", "car-min-rom", "car-min-edge", "car-filter", "car-lots", "car-df",
+  "car-slip", "car-slip-spread", "car-side-a", "car-side-b", "car-show-no",
+].forEach((id) => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener("input", refreshCallArb);
+});
+document.querySelectorAll("#panel-callarb input, #panel-callarb select").forEach((el) => {
+  el.addEventListener("change", () => {
+    persistCallArbRates();
+    if (el.id === "car-expiry" || el.id === "car-stock" || el.id === "car-band" || el.id === "car-max-strikes") {
+      if (state.connected) startCallArbScanner();
+      return;
+    }
+    refreshCallArb();
+  });
+});
 ["synth-allin", "synth-slip-fut", "synth-slip-opt", "synth-min-net"].forEach((id) => {
   document.getElementById(id).addEventListener("change", refreshSynth);
 });
@@ -657,7 +683,7 @@ window.setInterval(() => {
     if (!document.getElementById("plan1-btn").disabled) runPlan1();
     return;
   }
-  if (state.tab === "synth") return;
+  if (state.tab === "synth" || state.tab === "callarb") return;
   if (document.getElementById("scan-btn").disabled) return;
   runScan();
 }, 120000);

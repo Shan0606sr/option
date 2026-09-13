@@ -25,7 +25,8 @@ exports.handler = async (event) => {
   try {
     const quoted = await quoteMany(access, keys);
     const books = quoted.books || {};
-    const missing = tokens.filter((token) => !lookupQuote(books, token));
+    const skipHist = params.hist === "false";
+    const missing = skipHist ? [] : tokens.filter((token) => !lookupQuote(books, token));
     const hist = missing.length ? await historicalCloses(access, missing.slice(0, 12)) : { closes: {} };
     return {
       statusCode: 200,

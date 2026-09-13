@@ -311,6 +311,7 @@ async function startSynthScanner() {
     setSynthStatus("Connect Zerodha first.");
     return;
   }
+  if (typeof stopCallArbScanner === "function") stopCallArbScanner();
   const expiry = document.getElementById("synth-expiry").value || "nearest";
   const btn = document.getElementById("synth-btn");
   btn.disabled = true;
