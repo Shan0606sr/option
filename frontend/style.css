@@ -480,6 +480,7 @@ select.stock-select { width: 220px; }
 .results tbody tr.miss:hover { background: #4a2622; }
 .results tbody tr.theo { background: var(--amber-dim); }
 .results tbody tr.theo:hover { background: #4a3d18; }
+.results tbody tr.nodata { background: #1b1f23; color: var(--muted); }
 .signal-yes { color: var(--green); font-weight: 600; letter-spacing: 0.06em; }
 .signal-no { color: var(--muted); letter-spacing: 0.06em; }
 .signal-no-red { color: var(--red); font-weight: 600; letter-spacing: 0.06em; }

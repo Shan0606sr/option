@@ -112,7 +112,7 @@ async function synthUniverse(accessToken, { seed = false, expiry = "" } = {}) {
 function bookFromQuote(q) {
   if (!q) return { ltp: 0, bid: 0, ask: 0, bid_qty: 0, ask_qty: 0 };
   return {
-    ltp: Number(q.ltp || q.last_price || 0),
+    ltp: Number(q.last_price || 0),
     bid: Number(q.bid || 0),
     ask: Number(q.ask || 0),
     bid_qty: Number(q.bid_qty || 0),

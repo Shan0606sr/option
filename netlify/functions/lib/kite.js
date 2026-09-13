@@ -128,11 +128,12 @@ function parseQuote(q) {
   const depth = q.depth || {};
   const buy = (depth.buy || [])[0] || {};
   const sell = (depth.sell || [])[0] || {};
-  const close = (q.ohlc || {}).close || 0;
-  const last = Number(q.last_price || close || 0);
+  const last = Number(q.last_price || 0);
+  const close = Number((q.ohlc || {}).close || 0);
   return {
     last_price: last,
     ltp: last,
+    close,
     volume: q.volume || 0,
     oi: q.oi || 0,
     bid: buy.price || 0,
@@ -149,7 +150,6 @@ function indexQuote(out, key, q) {
   if (key && String(key).includes(":")) {
     const [ex, sym] = String(key).split(":");
     aliases.add(`${ex.toUpperCase()}:${sym}`);
-    aliases.add(sym);
   }
   if (q.instrument_token) aliases.add(String(q.instrument_token));
   for (const alias of aliases) {

@@ -1,4 +1,8 @@
 const SYNTH_LOG_KEY = "synth_future_log_v1";
+// 15-Sep 22550 CSV check (after hours): Call LTP missing, Put LTP 3.20
+// → NO DATA. Must not become 22550 + stale_close − 3.20 = 24621.05.
+// Live executable, if the book is used: buy 22550 + 1018.85 − 3.15 = 23565.70;
+// sell 22550 + 708.10 − 3.35 = 23254.75.
 const SYNTH_LOG_MAX = 4000;
 
 const synthState = {
@@ -68,7 +72,7 @@ function downloadSynthLog() {
   const rows = readSynthLog();
   const header = [
     "ts", "expiry", "strike", "side", "fut_bid", "fut_ask", "ce_bid", "ce_ask", "pe_bid", "pe_ask",
-    "synth", "future", "gross", "cost", "net", "net_lot", "mode", "executable", "used_ltp", "shown",
+    "synth", "future", "gross", "cost", "net", "net_lot", "mode", "executable", "used_ltp", "no_data", "shown",
   ];
   const lines = [header.join(",")].concat(rows.map((row) => header.map((key) => row[key] ?? "").join(",")));
   const blob = new Blob([lines.join("\n")], { type: "text/csv" });
@@ -94,6 +98,41 @@ function evaluateSynth() {
     const fut = synthBook(pair.fut_token);
     const lot = pair.lot_size || 65;
     const cost = synthCosts(lot);
+
+    if (!session.live && !(ce.ltp > 0 && pe.ltp > 0 && fut.ltp > 0)) {
+      logs.push({
+        ts: now,
+        expiry: pair.expiry,
+        strike: pair.strike,
+        side: "NO DATA",
+        fut_bid: fut.bid,
+        fut_ask: fut.ask,
+        ce_bid: ce.bid,
+        ce_ask: ce.ask,
+        pe_bid: pe.bid,
+        pe_ask: pe.ask,
+        synth: "",
+        future: fut.ltp || "",
+        gross: "",
+        cost: "",
+        net: "",
+        net_lot: "",
+        mode: session.mode,
+        executable: false,
+        used_ltp: true,
+        no_data: true,
+        shown: true,
+      });
+      rows.push({
+        ...pair,
+        noData: true,
+        executable: false,
+        usedLtp: true,
+        mode: session.mode,
+        side: "—",
+      });
+      continue;
+    }
 
     const legs = {
       buySynth: {
@@ -147,6 +186,7 @@ function evaluateSynth() {
         mode: session.mode,
         executable,
         used_ltp: usedLtp,
+        no_data: false,
         shown,
       });
       if (!shown) continue;
@@ -170,7 +210,7 @@ function evaluateSynth() {
   }
 
   appendSynthLog(logs);
-  rows.sort((a, b) => b.net - a.net);
+  rows.sort((a, b) => Number(Boolean(b.noData)) - Number(Boolean(a.noData)) || (b.net || 0) - (a.net || 0));
   return rows;
 }
 
@@ -190,8 +230,38 @@ function renderSynthRows(rows) {
     return;
   }
   empty.classList.add("hidden");
-  for (const row of rows) {
+  const visible = rows.filter((row) => row.noData || row.net > 0);
+  visible.sort((a, b) => Number(Boolean(b.noData)) - Number(Boolean(a.noData)) || (b.net || 0) - (a.net || 0));
+  if (!visible.length) {
+    empty.classList.remove("hidden");
+    empty.textContent = synthState.pairs.length
+      ? (nseSession().live
+        ? "No LIVE / EXECUTABLE quote. Missing bid or ask is skipped — LTP is not used in session."
+        : "No theoretical LTP edge after costs. Missing LTP is NO DATA, not a filled-in price.")
+      : "Connect Zerodha, then start the NIFTY scanner.";
+    return;
+  }
+  empty.classList.add("hidden");
+  for (const row of visible) {
     const tr = document.createElement("tr");
+    if (row.noData) {
+      tr.className = "nodata";
+      tr.innerHTML = `
+        <td>${row.expiry ? fmtExpiry(row.expiry) : "—"}</td>
+        <td class="num">${inr(row.strike, 0)}</td>
+        <td>—</td>
+        <td class="num">—</td>
+        <td class="num signal-no">NO DATA</td>
+        <td class="num">—</td>
+        <td class="num">—</td>
+        <td class="num">—</td>
+        <td class="num">—</td>
+        <td class="num">—</td>
+        <td class="signal-no">NO DATA</td>
+      `;
+      body.appendChild(tr);
+      continue;
+    }
     tr.className = row.executable ? "hit" : "theo";
     tr.innerHTML = `
       <td>${row.expiry ? fmtExpiry(row.expiry) : "—"}</td>

@@ -214,8 +214,8 @@
       <p class="footnote">
         Executable synthetic: buy synth = strike + CE ask − PE bid; sell synth = strike + CE bid − PE ask.
         Compared with the same-expiry NIFTY future (or nearest future if that expiry has no future).
-        During market hours only live bid/ask is used (LIVE / EXECUTABLE). Missing bid or ask is skipped, never replaced with LTP.
-        Outside hours, latest LTP is used for testing (LTP / THEORETICAL) and is never treated as executable. Session follows the NSE holiday calendar and Muhurat.
+        During market hours only live bid/ask is used (LIVE / EXECUTABLE). Missing bid or ask is skipped — never filled from LTP or previous close.
+        Outside hours, a pair needs CE LTP, PE LTP and future LTP. If any LTP is missing, the row is NO DATA (bid/ask and stale close are not used).
       </p>
     </section>
   </div>
