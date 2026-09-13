@@ -455,6 +455,9 @@ select.stock-select { width: 220px; }
 .results.plan1-table { min-width: 980px; }
 .results.synth-table { min-width: 1180px; }
 .results.car-table { min-width: 1480px; }
+.results.box-table { min-width: 1760px; }
+.results.vce-table { min-width: 1600px; }
+.results.vpe-table { min-width: 1600px; }
 
 .drawer.wide { width: min(560px, 100%); }
 

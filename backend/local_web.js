@@ -54,6 +54,9 @@ const API = {
   "/api/ticker": "ticker",
   "/api/call-arb": "call-arb",
   "/api/put-arb": "put-arb",
+  "/api/box-arb": "box-arb",
+  "/api/vert-ce": "vert-ce",
+  "/api/vert-pe": "vert-pe",
   "/api/margins": "margins",
 };
 

@@ -265,6 +265,194 @@
     };
   }
 
+  function boxPayoff(k1, k2) {
+    return num(k2) - num(k1);
+  }
+
+  function longBoxExpiryPayoff(spot, k1, k2) {
+    const s = num(spot);
+    const low = num(k1);
+    const high = num(k2);
+    return Math.max(s - low, 0) - Math.max(s - high, 0) + Math.max(high - s, 0) - Math.max(low - s, 0);
+  }
+
+  function boxPayoffSanity(k1, k2) {
+    const width = boxPayoff(k1, k2);
+    if (!(width > 0)) return { ok: false, width, samples: [] };
+    const samples = [num(k1) - Math.max(10, width), (num(k1) + num(k2)) / 2, num(k2) + Math.max(10, width)]
+      .map((spot) => ({
+        spot,
+        payoff: round2(longBoxExpiryPayoff(spot, k1, k2)),
+      }));
+    const ok = samples.every((row) => Math.abs(row.payoff - width) < 1e-6);
+    return { ok, width, samples };
+  }
+
+  function longBoxCost(k1CeAsk, k2CeBid, k2PeAsk, k1PeBid) {
+    return num(k1CeAsk) - num(k2CeBid) + num(k2PeAsk) - num(k1PeBid);
+  }
+
+  function shortBoxCredit(k1CeBid, k2CeAsk, k2PeBid, k1PeAsk) {
+    return num(k1CeBid) - num(k2CeAsk) + num(k2PeBid) - num(k1PeAsk);
+  }
+
+  function fourLegBoxCharges({ longBox, k1Ce, k2Ce, k2Pe, k1Pe, qty, rates }) {
+    const r = mergeRates(rates);
+    const size = num(qty);
+    const long = Boolean(longBox);
+    const legs = [
+      optionLeg({ name: "K1 CE", side: long ? "BUY" : "SELL", premium: k1Ce, qty: size, intrinsic: 0, rates: r }),
+      optionLeg({ name: "K2 CE", side: long ? "SELL" : "BUY", premium: k2Ce, qty: size, intrinsic: 0, rates: r }),
+      optionLeg({ name: "K2 PE", side: long ? "BUY" : "SELL", premium: k2Pe, qty: size, intrinsic: 0, rates: r }),
+      optionLeg({ name: "K1 PE", side: long ? "SELL" : "BUY", premium: k1Pe, qty: size, intrinsic: 0, rates: r }),
+    ];
+    return sumLegs(legs);
+  }
+
+  function boxSlippagePerShare({
+    k1CeBid, k1CeAsk, k2CeBid, k2CeAsk, k2PeBid, k2PeAsk, k1PeBid, k1PeAsk, rates,
+  }) {
+    const r = mergeRates(rates);
+    const spread = (bid, ask) => Math.max(0, num(ask) - num(bid));
+    const fromBook = (
+      spread(k1CeBid, k1CeAsk) + spread(k2CeBid, k2CeAsk) + spread(k2PeBid, k2PeAsk) + spread(k1PeBid, k1PeAsk)
+    ) * num(r.slipSpreadFrac);
+    return num(r.slippageInr) + fromBook;
+  }
+
+  function estimateBoxMargins({ longBox, k1, k2, k1Ce, k2Ce, k2Pe, k1Pe, lot, lots }) {
+    const qty = num(lot) * num(lots, 1);
+    const widthNotional = Math.max(0, boxPayoff(k1, k2)) * qty;
+    const long = Boolean(longBox);
+    const buyPremium = long ? (num(k1Ce) + num(k2Pe)) * qty : (num(k2Ce) + num(k1Pe)) * qty;
+    const combined = long
+      ? Math.max(buyPremium * 0.2, widthNotional * 0.04)
+      : buyPremium * 0.25 + widthNotional * 0.12;
+    return {
+      combined: round2(combined),
+      required: round2(combined),
+      uncertain: true,
+      source: "estimate",
+    };
+  }
+
+  function boxMethodology() {
+    return {
+      id: "box",
+      label: "Box: payoff = K2 − K1. Long pays less than width; short receives more than width.",
+    };
+  }
+
+  function callSpreadValue(spot, k1, k2) {
+    return Math.max(num(spot) - num(k1), 0) - Math.max(num(spot) - num(k2), 0);
+  }
+
+  function callVerticalCredit(k1CeBid, k2CeAsk) {
+    return num(k1CeBid) - num(k2CeAsk);
+  }
+
+  function callVerticalSanity(k1, k2) {
+    const width = boxPayoff(k1, k2);
+    if (!(width > 0)) return { ok: false, width, samples: [] };
+    const spots = [num(k1) - Math.max(10, width), (num(k1) + num(k2)) / 2, num(k2) + Math.max(10, width)];
+    const samples = spots.map((spot) => ({
+      spot,
+      value: round2(callSpreadValue(spot, k1, k2)),
+      cap: width,
+    }));
+    const ok = samples.every((row) => row.value <= width + 1e-9 && row.value >= -1e-9)
+      && Math.abs(callSpreadValue(num(k2) + width, k1, k2) - width) < 1e-6
+      && Math.abs(callSpreadValue(num(k1) - width, k1, k2)) < 1e-6;
+    return { ok, width, samples };
+  }
+
+  function twoLegCallVerticalCharges({ k1Ce, k2Ce, qty, rates }) {
+    const r = mergeRates(rates);
+    const size = num(qty);
+    return sumLegs([
+      optionLeg({ name: "K1 CE", side: "SELL", premium: k1Ce, qty: size, intrinsic: 0, rates: r }),
+      optionLeg({ name: "K2 CE", side: "BUY", premium: k2Ce, qty: size, intrinsic: 0, rates: r }),
+    ]);
+  }
+
+  function verticalSlippagePerShare({ k1Bid, k1Ask, k2Bid, k2Ask, rates }) {
+    const r = mergeRates(rates);
+    const spread = (bid, ask) => Math.max(0, num(ask) - num(bid));
+    return num(r.slippageInr) + (spread(k1Bid, k1Ask) + spread(k2Bid, k2Ask)) * num(r.slipSpreadFrac);
+  }
+
+  function estimateCallVerticalMargins({ k1, k2, k1Ce, k2Ce, lot, lots }) {
+    const qty = num(lot) * num(lots, 1);
+    const widthNotional = Math.max(0, boxPayoff(k1, k2)) * qty;
+    const credit = Math.max(0, (num(k1Ce) - num(k2Ce)) * qty);
+    const combined = Math.max(widthNotional - credit, widthNotional * 0.25);
+    return {
+      combined: round2(combined),
+      required: round2(combined),
+      uncertain: true,
+      source: "estimate",
+    };
+  }
+
+  function callVerticalMethodology() {
+    return {
+      id: "vert-ce",
+      label: "Call vertical: sell K1 CE bid, buy K2 CE ask. Flag credit > K2 − K1.",
+    };
+  }
+
+  function putSpreadValue(spot, k1, k2) {
+    return Math.max(num(k2) - num(spot), 0) - Math.max(num(k1) - num(spot), 0);
+  }
+
+  function putVerticalCredit(k2PeBid, k1PeAsk) {
+    return num(k2PeBid) - num(k1PeAsk);
+  }
+
+  function putVerticalSanity(k1, k2) {
+    const width = boxPayoff(k1, k2);
+    if (!(width > 0)) return { ok: false, width, samples: [] };
+    const spots = [num(k1) - Math.max(10, width), (num(k1) + num(k2)) / 2, num(k2) + Math.max(10, width)];
+    const samples = spots.map((spot) => ({
+      spot,
+      value: round2(putSpreadValue(spot, k1, k2)),
+      cap: width,
+    }));
+    const ok = samples.every((row) => row.value <= width + 1e-9 && row.value >= -1e-9)
+      && Math.abs(putSpreadValue(num(k1) - width, k1, k2) - width) < 1e-6
+      && Math.abs(putSpreadValue(num(k2) + width, k1, k2)) < 1e-6;
+    return { ok, width, samples };
+  }
+
+  function twoLegPutVerticalCharges({ k1Pe, k2Pe, qty, rates }) {
+    const r = mergeRates(rates);
+    const size = num(qty);
+    return sumLegs([
+      optionLeg({ name: "K1 PE", side: "BUY", premium: k1Pe, qty: size, intrinsic: 0, rates: r }),
+      optionLeg({ name: "K2 PE", side: "SELL", premium: k2Pe, qty: size, intrinsic: 0, rates: r }),
+    ]);
+  }
+
+  function estimatePutVerticalMargins({ k1, k2, k1Pe, k2Pe, lot, lots }) {
+    const qty = num(lot) * num(lots, 1);
+    const widthNotional = Math.max(0, boxPayoff(k1, k2)) * qty;
+    const credit = Math.max(0, (num(k2Pe) - num(k1Pe)) * qty);
+    const combined = Math.max(widthNotional - credit, widthNotional * 0.25);
+    return {
+      combined: round2(combined),
+      required: round2(combined),
+      uncertain: true,
+      source: "estimate",
+    };
+  }
+
+  function putVerticalMethodology() {
+    return {
+      id: "vert-pe",
+      label: "Put vertical: buy K1 PE ask, sell K2 PE bid. Flag credit > K2 − K1.",
+    };
+  }
+
   const api = {
     DEFAULT_RATES,
     mergeRates,
@@ -277,6 +465,28 @@
     putMethodology,
     slippagePerShare,
     estimateMargins,
+    boxPayoff,
+    longBoxExpiryPayoff,
+    boxPayoffSanity,
+    longBoxCost,
+    shortBoxCredit,
+    fourLegBoxCharges,
+    boxSlippagePerShare,
+    estimateBoxMargins,
+    boxMethodology,
+    callSpreadValue,
+    callVerticalCredit,
+    callVerticalSanity,
+    twoLegCallVerticalCharges,
+    verticalSlippagePerShare,
+    estimateCallVerticalMargins,
+    callVerticalMethodology,
+    putSpreadValue,
+    putVerticalCredit,
+    putVerticalSanity,
+    twoLegPutVerticalCharges,
+    estimatePutVerticalMargins,
+    putVerticalMethodology,
     sebiCharge,
     round2,
   };

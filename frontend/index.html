@@ -38,6 +38,9 @@
       <button type="button" class="page-tab" data-tab="synth">Synthetic futures</button>
       <button type="button" class="page-tab" data-tab="callarb">Synthetic CE</button>
       <button type="button" class="page-tab" data-tab="putarb">Synthetic PE</button>
+      <button type="button" class="page-tab" data-tab="boxarb">Box Arbitrage</button>
+      <button type="button" class="page-tab" data-tab="vertce">Vertical CE</button>
+      <button type="button" class="page-tab" data-tab="vertpe">Vertical PE</button>
     </nav>
 
     <section id="panel-index" class="index-panel">
@@ -471,6 +474,368 @@
         Filters are yours — ₹1,500 is not a built-in threshold.
       </p>
     </section>
+
+    <section id="panel-boxarb" hidden>
+      <div class="index-toolbar">
+        <div>
+          <h2>Box Arbitrage</h2>
+          <p class="index-sub">Four-leg long and short boxes on the same expiry. Fixed payoff = K2 − K1. Identification only — no orders are sent.</p>
+        </div>
+      </div>
+      <div id="box-mode" class="synth-mode synth-mode-ltp" role="status">
+        <strong id="box-mode-label">LTP / THEORETICAL</strong>
+        <span id="box-mode-reason">Checking NSE session…</span>
+      </div>
+      <p id="box-method" class="index-meta">Box: payoff = K2 − K1</p>
+      <section class="controls">
+        <label class="control">
+          <span class="label">Expiry</span>
+          <select id="box-expiry">
+            <option value="nearest" selected>Nearest</option>
+            <option value="next">Next</option>
+          </select>
+        </label>
+        <label class="control plan1-filter">
+          <span class="label">Stock</span>
+          <select id="box-stock" class="stock-select">
+            <option value="">All F&amp;O stocks</option>
+          </select>
+        </label>
+        <label class="control">
+          <span class="label">Strike band %</span>
+          <input id="box-band" type="number" min="0" step="0.5" value="6" />
+        </label>
+        <label class="control">
+          <span class="label">Max strikes</span>
+          <input id="box-max-strikes" type="number" min="0" step="1" value="5" />
+        </label>
+        <label class="control">
+          <span class="label">Lots</span>
+          <input id="box-lots" type="number" min="1" step="1" value="1" />
+        </label>
+        <label class="control">
+          <span class="label">Min net ₹/lot</span>
+          <input id="box-min-net" type="number" min="0" step="1" value="0" />
+        </label>
+        <label class="control">
+          <span class="label">Min RoM %</span>
+          <input id="box-min-rom" type="number" min="0" step="0.01" value="0" />
+        </label>
+        <label class="control">
+          <span class="label">Min edge ₹</span>
+          <input id="box-min-edge" type="number" min="0" step="0.05" value="0" />
+        </label>
+        <label class="control">
+          <span class="label">Find stock</span>
+          <input id="box-filter" type="text" placeholder="BOSCH" />
+        </label>
+        <fieldset class="strategies">
+          <legend class="label">Directions</legend>
+          <label class="check"><input id="box-side-a" type="checkbox" checked /> A · long box</label>
+          <label class="check"><input id="box-side-b" type="checkbox" checked /> B · short box</label>
+          <label class="check"><input id="box-show-no" type="checkbox" /> Show no-arb / incomplete</label>
+        </fieldset>
+        <button id="box-btn" type="button" class="scan-btn">Start scanner</button>
+      </section>
+      <details class="rates-panel">
+        <summary>Zerodha rate card, slippage and liquidity (configuration — not hard-coded in the scanner)</summary>
+        <div class="rates-grid">
+          <label class="control"><span class="label">Opt brokerage ₹</span><input id="box-opt-brok" type="number" step="1" value="20" /></label>
+          <label class="control"><span class="label">Opt STT sell %</span><input id="box-opt-stt" type="number" step="0.01" value="0.15" /></label>
+          <label class="control"><span class="label">Opt exercise STT %</span><input id="box-opt-ex-stt" type="number" step="0.01" value="0.15" /></label>
+          <label class="control"><span class="label">Opt txn %</span><input id="box-opt-txn" type="number" step="0.00001" value="0.03553" /></label>
+          <label class="control"><span class="label">Opt stamp buy %</span><input id="box-opt-stamp" type="number" step="0.0001" value="0.003" /></label>
+          <label class="control"><span class="label">GST %</span><input id="box-gst" type="number" step="0.1" value="18" /></label>
+          <label class="control"><span class="label">SEBI ₹/crore</span><input id="box-sebi" type="number" step="1" value="10" /></label>
+          <label class="control"><span class="label">Slippage ₹/sh</span><input id="box-slip" type="number" step="0.05" value="0.50" /></label>
+          <label class="control"><span class="label">Slippage × spread</span><input id="box-slip-spread" type="number" step="0.05" value="0.25" /></label>
+          <label class="control"><span class="label">Stale quote ms</span><input id="box-stale" type="number" step="100" value="2500" /></label>
+          <label class="control"><span class="label">Snapshot span ms</span><input id="box-snap" type="number" step="100" value="1500" /></label>
+          <label class="control"><span class="label">Max opt spread %</span><input id="box-opt-spread" type="number" step="0.1" value="8" /></label>
+          <label class="check rates-check"><input id="box-include-ex" type="checkbox" /> Include bought-and-exercised option STT</label>
+        </div>
+      </details>
+      <p id="box-status" class="index-meta">Idle · scanner does not place orders</p>
+      <main class="table-wrap">
+        <table class="results box-table">
+          <thead>
+            <tr>
+              <th>Stock</th>
+              <th>Expiry</th>
+              <th class="num">Lower K</th>
+              <th class="num">Higher K</th>
+              <th class="num">Width</th>
+              <th class="num">K1 CE (B/S)</th>
+              <th class="num">K2 CE (B/S)</th>
+              <th class="num">K2 PE (B/S)</th>
+              <th class="num">K1 PE (B/S)</th>
+              <th class="num">Box cost/credit</th>
+              <th class="num">Gross Edge</th>
+              <th class="num">Charges</th>
+              <th class="num">Slippage</th>
+              <th class="num">Net / box</th>
+              <th class="num">Lot size</th>
+              <th class="num">Net / lot</th>
+              <th class="num">Margin</th>
+              <th class="num">RoM</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="box-body"></tbody>
+        </table>
+        <p id="box-empty" class="empty">Start the scanner to compare every K1/K2 strike pair’s four-leg box against the fixed payoff K2 − K1.</p>
+      </main>
+      <p class="footnote">
+        Long box buys K1 CE and K2 PE at ask, sells K2 CE and K1 PE at bid. Short box is the reverse.
+        Gross long = (K2 − K1) − net cost. Gross short = net credit − (K2 − K1).
+        Every K1 &lt; K2 pair among the selected strikes is scanned — not only adjacent strikes.
+        Each price is tagged <strong>(B)</strong> buy or <strong>(S)</strong> sell.
+        During market hours only WebSocket bid/ask from the same snapshot can become
+        <strong>🟢 CONFIRMED ARBITRAGE</strong>. After hours the book is LTP / theoretical and can never be confirmed.
+        Margin marked * is an estimate until Zerodha basket margin returns. Ranked by return on margin, then net profit.
+        Version 1 does not present-value the fixed payoff.
+      </p>
+    </section>
+
+    <section id="panel-vertce" hidden>
+      <div class="index-toolbar">
+        <div>
+          <h2>Call Vertical Arbitrage</h2>
+          <p class="index-sub">Sell the lower-strike Call at bid, buy the higher-strike Call at ask. Flag credit &gt; K2 − K1. Identification only — no orders are sent.</p>
+        </div>
+      </div>
+      <div id="vce-mode" class="synth-mode synth-mode-ltp" role="status">
+        <strong id="vce-mode-label">LTP / THEORETICAL</strong>
+        <span id="vce-mode-reason">Checking NSE session…</span>
+      </div>
+      <p id="vce-method" class="index-meta">Call vertical: sell K1 CE bid, buy K2 CE ask. Flag credit &gt; K2 − K1.</p>
+      <section class="controls">
+        <label class="control">
+          <span class="label">Expiry</span>
+          <select id="vce-expiry">
+            <option value="nearest" selected>Nearest</option>
+            <option value="next">Next</option>
+          </select>
+        </label>
+        <label class="control plan1-filter">
+          <span class="label">Stock</span>
+          <select id="vce-stock" class="stock-select">
+            <option value="">All F&amp;O stocks</option>
+          </select>
+        </label>
+        <label class="control">
+          <span class="label">Strike band %</span>
+          <input id="vce-band" type="number" min="0" step="0.5" value="6" />
+        </label>
+        <label class="control">
+          <span class="label">Max strikes</span>
+          <input id="vce-max-strikes" type="number" min="0" step="1" value="5" />
+        </label>
+        <label class="control">
+          <span class="label">Lots</span>
+          <input id="vce-lots" type="number" min="1" step="1" value="1" />
+        </label>
+        <label class="control">
+          <span class="label">Min net ₹/lot</span>
+          <input id="vce-min-net" type="number" min="0" step="1" value="0" />
+        </label>
+        <label class="control">
+          <span class="label">Min RoM %</span>
+          <input id="vce-min-rom" type="number" min="0" step="0.01" value="0" />
+        </label>
+        <label class="control">
+          <span class="label">Min edge ₹</span>
+          <input id="vce-min-edge" type="number" min="0" step="0.05" value="0" />
+        </label>
+        <label class="control">
+          <span class="label">Find stock</span>
+          <input id="vce-filter" type="text" placeholder="RELIANCE" />
+        </label>
+        <fieldset class="strategies">
+          <legend class="label">Rows</legend>
+          <label class="check"><input id="vce-show-no" type="checkbox" /> Show no-arb / incomplete</label>
+        </fieldset>
+        <button id="vce-btn" type="button" class="scan-btn">Start scanner</button>
+      </section>
+      <details class="rates-panel">
+        <summary>Zerodha rate card, slippage and liquidity (configuration — not hard-coded in the scanner)</summary>
+        <div class="rates-grid">
+          <label class="control"><span class="label">Opt brokerage ₹</span><input id="vce-opt-brok" type="number" step="1" value="20" /></label>
+          <label class="control"><span class="label">Opt STT sell %</span><input id="vce-opt-stt" type="number" step="0.01" value="0.15" /></label>
+          <label class="control"><span class="label">Opt exercise STT %</span><input id="vce-opt-ex-stt" type="number" step="0.01" value="0.15" /></label>
+          <label class="control"><span class="label">Opt txn %</span><input id="vce-opt-txn" type="number" step="0.00001" value="0.03553" /></label>
+          <label class="control"><span class="label">Opt stamp buy %</span><input id="vce-opt-stamp" type="number" step="0.0001" value="0.003" /></label>
+          <label class="control"><span class="label">GST %</span><input id="vce-gst" type="number" step="0.1" value="18" /></label>
+          <label class="control"><span class="label">SEBI ₹/crore</span><input id="vce-sebi" type="number" step="1" value="10" /></label>
+          <label class="control"><span class="label">Slippage ₹/sh</span><input id="vce-slip" type="number" step="0.05" value="0.50" /></label>
+          <label class="control"><span class="label">Slippage × spread</span><input id="vce-slip-spread" type="number" step="0.05" value="0.25" /></label>
+          <label class="control"><span class="label">Stale quote ms</span><input id="vce-stale" type="number" step="100" value="2500" /></label>
+          <label class="control"><span class="label">Snapshot span ms</span><input id="vce-snap" type="number" step="100" value="1500" /></label>
+          <label class="control"><span class="label">Max opt spread %</span><input id="vce-opt-spread" type="number" step="0.1" value="8" /></label>
+          <label class="check rates-check"><input id="vce-include-ex" type="checkbox" /> Include bought-and-exercised option STT</label>
+        </div>
+      </details>
+      <p id="vce-status" class="index-meta">Idle · scanner does not place orders</p>
+      <main class="table-wrap">
+        <table class="results vce-table">
+          <thead>
+            <tr>
+              <th>Stock</th>
+              <th>Expiry</th>
+              <th class="num">Lower strike</th>
+              <th class="num">Higher strike</th>
+              <th class="num">Width</th>
+              <th class="num">Lower CE bid</th>
+              <th class="num">Higher CE ask</th>
+              <th class="num">Net credit</th>
+              <th class="num">Max payoff</th>
+              <th class="num">Gross edge</th>
+              <th class="num">Charges</th>
+              <th class="num">Slippage</th>
+              <th class="num">Net edge</th>
+              <th class="num">Lot size</th>
+              <th class="num">Net / lot</th>
+              <th class="num">Margin</th>
+              <th class="num">RoM</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="vce-body"></tbody>
+        </table>
+        <p id="vce-empty" class="empty">Start the scanner to test every K1 &lt; K2 Call pair: sell K1 CE bid, buy K2 CE ask, flag credit &gt; strike width.</p>
+      </main>
+      <p class="footnote">
+        Short Call spread: <strong>SELL</strong> lower CE at bid, <strong>BUY</strong> higher CE at ask.
+        Gross edge = net credit − (K2 − K1). At expiry a Call spread cannot be worth more than the strike width.
+        Every K1 &lt; K2 pair among the selected strikes is scanned — including ₹500 gaps and non-adjacent strikes.
+        Charges are the two option legs only, not the three-leg synthetic model.
+        Each price is tagged <strong>(S)</strong> sell or <strong>(B)</strong> buy.
+        During market hours only WebSocket bid/ask from the same snapshot can become
+        <strong>🟢 CONFIRMED ARBITRAGE</strong>. After hours LTP credit &gt; width is
+        <strong>🟡 POTENTIAL</strong> and can never be confirmed.
+        Margin marked * is an estimate until Zerodha basket margin returns. Ranked by return on margin, then net profit.
+      </p>
+    </section>
+
+    <section id="panel-vertpe" hidden>
+      <div class="index-toolbar">
+        <div>
+          <h2>Put Vertical Arbitrage</h2>
+          <p class="index-sub">Buy the lower-strike Put at ask, sell the higher-strike Put at bid. Flag credit &gt; K2 − K1. Identification only — no orders are sent.</p>
+        </div>
+      </div>
+      <div id="vpe-mode" class="synth-mode synth-mode-ltp" role="status">
+        <strong id="vpe-mode-label">LTP / THEORETICAL</strong>
+        <span id="vpe-mode-reason">Checking NSE session…</span>
+      </div>
+      <p id="vpe-method" class="index-meta">Put vertical: buy K1 PE ask, sell K2 PE bid. Flag credit &gt; K2 − K1.</p>
+      <section class="controls">
+        <label class="control">
+          <span class="label">Expiry</span>
+          <select id="vpe-expiry">
+            <option value="nearest" selected>Nearest</option>
+            <option value="next">Next</option>
+          </select>
+        </label>
+        <label class="control plan1-filter">
+          <span class="label">Stock</span>
+          <select id="vpe-stock" class="stock-select">
+            <option value="">All F&amp;O stocks</option>
+          </select>
+        </label>
+        <label class="control">
+          <span class="label">Strike band %</span>
+          <input id="vpe-band" type="number" min="0" step="0.5" value="6" />
+        </label>
+        <label class="control">
+          <span class="label">Max strikes</span>
+          <input id="vpe-max-strikes" type="number" min="0" step="1" value="5" />
+        </label>
+        <label class="control">
+          <span class="label">Lots</span>
+          <input id="vpe-lots" type="number" min="1" step="1" value="1" />
+        </label>
+        <label class="control">
+          <span class="label">Min net ₹/lot</span>
+          <input id="vpe-min-net" type="number" min="0" step="1" value="0" />
+        </label>
+        <label class="control">
+          <span class="label">Min RoM %</span>
+          <input id="vpe-min-rom" type="number" min="0" step="0.01" value="0" />
+        </label>
+        <label class="control">
+          <span class="label">Min edge ₹</span>
+          <input id="vpe-min-edge" type="number" min="0" step="0.05" value="0" />
+        </label>
+        <label class="control">
+          <span class="label">Find stock</span>
+          <input id="vpe-filter" type="text" placeholder="RELIANCE" />
+        </label>
+        <fieldset class="strategies">
+          <legend class="label">Rows</legend>
+          <label class="check"><input id="vpe-show-no" type="checkbox" /> Show no-arb / incomplete</label>
+        </fieldset>
+        <button id="vpe-btn" type="button" class="scan-btn">Start scanner</button>
+      </section>
+      <details class="rates-panel">
+        <summary>Zerodha rate card, slippage and liquidity (configuration — not hard-coded in the scanner)</summary>
+        <div class="rates-grid">
+          <label class="control"><span class="label">Opt brokerage ₹</span><input id="vpe-opt-brok" type="number" step="1" value="20" /></label>
+          <label class="control"><span class="label">Opt STT sell %</span><input id="vpe-opt-stt" type="number" step="0.01" value="0.15" /></label>
+          <label class="control"><span class="label">Opt exercise STT %</span><input id="vpe-opt-ex-stt" type="number" step="0.01" value="0.15" /></label>
+          <label class="control"><span class="label">Opt txn %</span><input id="vpe-opt-txn" type="number" step="0.00001" value="0.03553" /></label>
+          <label class="control"><span class="label">Opt stamp buy %</span><input id="vpe-opt-stamp" type="number" step="0.0001" value="0.003" /></label>
+          <label class="control"><span class="label">GST %</span><input id="vpe-gst" type="number" step="0.1" value="18" /></label>
+          <label class="control"><span class="label">SEBI ₹/crore</span><input id="vpe-sebi" type="number" step="1" value="10" /></label>
+          <label class="control"><span class="label">Slippage ₹/sh</span><input id="vpe-slip" type="number" step="0.05" value="0.50" /></label>
+          <label class="control"><span class="label">Slippage × spread</span><input id="vpe-slip-spread" type="number" step="0.05" value="0.25" /></label>
+          <label class="control"><span class="label">Stale quote ms</span><input id="vpe-stale" type="number" step="100" value="2500" /></label>
+          <label class="control"><span class="label">Snapshot span ms</span><input id="vpe-snap" type="number" step="100" value="1500" /></label>
+          <label class="control"><span class="label">Max opt spread %</span><input id="vpe-opt-spread" type="number" step="0.1" value="8" /></label>
+          <label class="check rates-check"><input id="vpe-include-ex" type="checkbox" /> Include bought-and-exercised option STT</label>
+        </div>
+      </details>
+      <p id="vpe-status" class="index-meta">Idle · scanner does not place orders</p>
+      <main class="table-wrap">
+        <table class="results vpe-table">
+          <thead>
+            <tr>
+              <th>Stock</th>
+              <th>Expiry</th>
+              <th class="num">Lower strike</th>
+              <th class="num">Higher strike</th>
+              <th class="num">Width</th>
+              <th class="num">Lower PE ask</th>
+              <th class="num">Higher PE bid</th>
+              <th class="num">Net credit</th>
+              <th class="num">Max payoff</th>
+              <th class="num">Gross edge</th>
+              <th class="num">Charges</th>
+              <th class="num">Slippage</th>
+              <th class="num">Net edge</th>
+              <th class="num">Lot size</th>
+              <th class="num">Net / lot</th>
+              <th class="num">Margin</th>
+              <th class="num">RoM</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="vpe-body"></tbody>
+        </table>
+        <p id="vpe-empty" class="empty">Start the scanner to test every K1 &lt; K2 Put pair: buy K1 PE ask, sell K2 PE bid, flag credit &gt; strike width.</p>
+      </main>
+      <p class="footnote">
+        Short Put spread: <strong>BUY</strong> lower PE at ask, <strong>SELL</strong> higher PE at bid.
+        Gross edge = (K2 PE bid − K1 PE ask) − (K2 − K1). At expiry a Put spread cannot be worth more than the strike width.
+        Every K1 &lt; K2 pair among the selected strikes is scanned — including ₹500 gaps and non-adjacent strikes.
+        Charges are the two option legs only, not the three-leg synthetic model.
+        Each price is tagged <strong>(B)</strong> buy or <strong>(S)</strong> sell.
+        During market hours only WebSocket bid/ask from the same snapshot can become
+        <strong>🟢 CONFIRMED ARBITRAGE</strong>. After hours LTP credit &gt; width is
+        <strong>🟡 POTENTIAL</strong> and can never be confirmed.
+        Margin marked * is an estimate until Zerodha basket margin returns. Ranked by return on margin, then net profit.
+      </p>
+    </section>
   </div>
 
   <aside id="drawer" class="drawer" hidden>
@@ -493,6 +858,9 @@
   <script src="synth.js"></script>
   <script src="call-arb.js"></script>
   <script src="put-arb.js"></script>
+  <script src="box-arb.js"></script>
+  <script src="vert-ce.js"></script>
+  <script src="vert-pe.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -347,6 +347,9 @@ function showTab(tab) {
   document.getElementById("panel-synth").hidden = tab !== "synth";
   document.getElementById("panel-callarb").hidden = tab !== "callarb";
   document.getElementById("panel-putarb").hidden = tab !== "putarb";
+  document.getElementById("panel-boxarb").hidden = tab !== "boxarb";
+  document.getElementById("panel-vertce").hidden = tab !== "vertce";
+  document.getElementById("panel-vertpe").hidden = tab !== "vertpe";
 }
 
 async function consumeKiteRedirect() {
@@ -585,6 +588,21 @@ document.querySelectorAll(".page-tab").forEach((btn) => {
       else refreshPutArb();
       return;
     }
+    if (btn.dataset.tab === "boxarb") {
+      if (state.connected && !boxState.started) await startBoxArbScanner();
+      else refreshBoxArb();
+      return;
+    }
+    if (btn.dataset.tab === "vertce") {
+      if (state.connected && !vceState.started) await startVertCeScanner();
+      else refreshVertCe();
+      return;
+    }
+    if (btn.dataset.tab === "vertpe") {
+      if (state.connected && !vpeState.started) await startVertPeScanner();
+      else refreshVertPe();
+      return;
+    }
     if (state.connected && !state.scanned) {
       state.scanned = true;
       await runScan();
@@ -630,6 +648,9 @@ async function logoutZerodha() {
   stopSynthScanner();
   stopCallArbScanner();
   stopPutArbScanner();
+  stopBoxArbScanner();
+  stopVertCeScanner();
+  stopVertPeScanner();
 }
 
 document.getElementById("logout-btn").addEventListener("click", logoutZerodha);
@@ -652,6 +673,9 @@ document.getElementById("synth-btn").addEventListener("click", startSynthScanner
 document.getElementById("synth-log-btn").addEventListener("click", downloadSynthLog);
 document.getElementById("car-btn").addEventListener("click", startCallArbScanner);
 document.getElementById("par-btn").addEventListener("click", startPutArbScanner);
+document.getElementById("box-btn").addEventListener("click", startBoxArbScanner);
+document.getElementById("vce-btn").addEventListener("click", startVertCeScanner);
+document.getElementById("vpe-btn").addEventListener("click", startVertPeScanner);
 [
   "car-min-net", "car-min-rom", "car-min-edge", "car-filter", "car-lots", "car-df",
   "car-slip", "car-slip-spread", "car-side-a", "car-side-b", "car-show-no",
@@ -686,6 +710,57 @@ document.querySelectorAll("#panel-putarb input, #panel-putarb select").forEach((
     refreshPutArb();
   });
 });
+[
+  "box-min-net", "box-min-rom", "box-min-edge", "box-filter", "box-lots",
+  "box-slip", "box-slip-spread", "box-side-a", "box-side-b", "box-show-no",
+].forEach((id) => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener("input", refreshBoxArb);
+});
+document.querySelectorAll("#panel-boxarb input, #panel-boxarb select").forEach((el) => {
+  el.addEventListener("change", () => {
+    persistBoxArbRates();
+    if (el.id === "box-expiry" || el.id === "box-stock" || el.id === "box-band" || el.id === "box-max-strikes") {
+      if (state.connected) startBoxArbScanner();
+      return;
+    }
+    refreshBoxArb();
+  });
+});
+[
+  "vce-min-net", "vce-min-rom", "vce-min-edge", "vce-filter", "vce-lots",
+  "vce-slip", "vce-slip-spread", "vce-show-no",
+].forEach((id) => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener("input", refreshVertCe);
+});
+document.querySelectorAll("#panel-vertce input, #panel-vertce select").forEach((el) => {
+  el.addEventListener("change", () => {
+    persistVertCeRates();
+    if (el.id === "vce-expiry" || el.id === "vce-stock" || el.id === "vce-band" || el.id === "vce-max-strikes") {
+      if (state.connected) startVertCeScanner();
+      return;
+    }
+    refreshVertCe();
+  });
+});
+[
+  "vpe-min-net", "vpe-min-rom", "vpe-min-edge", "vpe-filter", "vpe-lots",
+  "vpe-slip", "vpe-slip-spread", "vpe-show-no",
+].forEach((id) => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener("input", refreshVertPe);
+});
+document.querySelectorAll("#panel-vertpe input, #panel-vertpe select").forEach((el) => {
+  el.addEventListener("change", () => {
+    persistVertPeRates();
+    if (el.id === "vpe-expiry" || el.id === "vpe-stock" || el.id === "vpe-band" || el.id === "vpe-max-strikes") {
+      if (state.connected) startVertPeScanner();
+      return;
+    }
+    refreshVertPe();
+  });
+});
 ["synth-allin", "synth-slip-fut", "synth-slip-opt", "synth-min-net"].forEach((id) => {
   document.getElementById(id).addEventListener("change", refreshSynth);
 });
@@ -708,7 +783,7 @@ window.setInterval(() => {
     if (!document.getElementById("plan1-btn").disabled) runPlan1();
     return;
   }
-  if (state.tab === "synth" || state.tab === "callarb" || state.tab === "putarb") return;
+  if (state.tab === "synth" || state.tab === "callarb" || state.tab === "putarb" || state.tab === "boxarb" || state.tab === "vertce" || state.tab === "vertpe") return;
   if (document.getElementById("scan-btn").disabled) return;
   runScan();
 }, 120000);

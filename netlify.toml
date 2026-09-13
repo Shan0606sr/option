@@ -17,6 +17,15 @@
 [functions.put-arb]
   timeout = 26
 
+[functions.box-arb]
+  timeout = 26
+
+[functions.vert-ce]
+  timeout = 26
+
+[functions.vert-pe]
+  timeout = 26
+
 [functions.margins]
   timeout = 20
 
@@ -88,6 +97,21 @@
 [[redirects]]
   from = "/api/put-arb"
   to = "/.netlify/functions/put-arb"
+  status = 200
+
+[[redirects]]
+  from = "/api/box-arb"
+  to = "/.netlify/functions/box-arb"
+  status = 200
+
+[[redirects]]
+  from = "/api/vert-ce"
+  to = "/.netlify/functions/vert-ce"
+  status = 200
+
+[[redirects]]
+  from = "/api/vert-pe"
+  to = "/.netlify/functions/vert-pe"
   status = 200
 
 [[redirects]]

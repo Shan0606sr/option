@@ -240,4 +240,4 @@ function applySeedBooks(pairs, books, ts = Date.now()) {
   return out;
 }
 
-module.exports = { callArbUniverse, applySeedBooks, pickStrikes };
+module.exports = { callArbUniverse, applySeedBooks, pickStrikes, buildStockUniverse, upcomingExpiries, bookFromQuote, targetExpiry };

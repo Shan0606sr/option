@@ -313,6 +313,9 @@ async function startSynthScanner() {
   }
   if (typeof stopCallArbScanner === "function") stopCallArbScanner();
   if (typeof stopPutArbScanner === "function") stopPutArbScanner();
+  if (typeof stopBoxArbScanner === "function") stopBoxArbScanner();
+  if (typeof stopVertCeScanner === "function") stopVertCeScanner();
+  if (typeof stopVertPeScanner === "function") stopVertPeScanner();
   const expiry = document.getElementById("synth-expiry").value || "nearest";
   const btn = document.getElementById("synth-btn");
   btn.disabled = true;
