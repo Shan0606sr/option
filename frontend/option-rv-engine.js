@@ -85,6 +85,23 @@
     return discount(rate, t) * f * Math.sqrt(t) * normPdf(d1);
   }
 
+  function black76Delta({ F, K, T, sigma, isCall, rate = 0 }) {
+    const f = num(F);
+    const k = num(K);
+    const t = num(T);
+    const vol = num(sigma);
+    if (!(f > 0) || !(k > 0) || !(t > 0) || !(vol > 0)) return null;
+    const srt = vol * Math.sqrt(t);
+    const d1 = (Math.log(f / k) + 0.5 * vol * vol * t) / srt;
+    const df = discount(rate, t);
+    return isCall ? df * normCdf(d1) : df * (normCdf(d1) - 1);
+  }
+
+  function syntheticDelta(callDelta, putDelta) {
+    if (callDelta == null || putDelta == null) return null;
+    return num(callDelta) - num(putDelta);
+  }
+
   function impliedVol({ price, F, K, T, isCall, rate = 0, minIv = DEFAULTS.minIv, maxIv = DEFAULTS.maxIv }) {
     const px = num(price);
     const t = Math.max(num(T), DEFAULTS.minTYears);
@@ -394,6 +411,8 @@
     intrinsic,
     black76,
     black76Vega,
+    black76Delta,
+    syntheticDelta,
     impliedVol,
     spreadPct,
     quoteValid,

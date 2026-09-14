@@ -353,6 +353,7 @@ function showTab(tab) {
   document.getElementById("panel-silver").hidden = tab !== "silver";
   document.getElementById("panel-orv").hidden = tab !== "optrv";
   document.getElementById("panel-butterfly").hidden = tab !== "butterfly";
+  document.getElementById("panel-calendar").hidden = tab !== "calendar";
 }
 
 async function consumeKiteRedirect() {
@@ -621,6 +622,11 @@ document.querySelectorAll(".page-tab").forEach((btn) => {
       else refreshButterfly();
       return;
     }
+    if (btn.dataset.tab === "calendar") {
+      if (state.connected && !calState.started) await startCalendarScanner();
+      else refreshCalendar();
+      return;
+    }
     if (state.connected && !state.scanned) {
       state.scanned = true;
       await runScan();
@@ -672,6 +678,7 @@ async function logoutZerodha() {
   stopSilverArbScanner();
   stopOptionRvScanner();
   stopButterflyScanner();
+  stopCalendarScanner();
 }
 
 document.getElementById("logout-btn").addEventListener("click", logoutZerodha);
@@ -700,6 +707,7 @@ document.getElementById("vpe-btn").addEventListener("click", startVertPeScanner)
 document.getElementById("sil-btn").addEventListener("click", startSilverArbScanner);
 document.getElementById("orv-btn").addEventListener("click", startOptionRvScanner);
 document.getElementById("bfly-btn").addEventListener("click", startButterflyScanner);
+document.getElementById("cal-btn").addEventListener("click", startCalendarScanner);
 [
   "car-min-net", "car-min-rom", "car-min-edge", "car-filter", "car-lots", "car-df",
   "car-slip", "car-slip-spread", "car-side-a", "car-side-b", "car-show-no",
@@ -836,6 +844,23 @@ document.querySelectorAll("#panel-butterfly input, #panel-butterfly select").for
     refreshButterfly();
   });
 });
+[
+  "cal-filter-mis", "cal-filter-edge", "cal-filter", "cal-lots",
+  "cal-slip", "cal-slip-spread", "cal-show-ignore",
+].forEach((id) => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener("input", refreshCalendar);
+});
+document.querySelectorAll("#panel-calendar input, #panel-calendar select").forEach((el) => {
+  el.addEventListener("change", () => {
+    persistCalendarRates();
+    if (el.id === "cal-pair" || el.id === "cal-stock" || el.id === "cal-band" || el.id === "cal-max-strikes") {
+      if (state.connected) startCalendarScanner();
+      return;
+    }
+    refreshCalendar();
+  });
+});
 ["synth-allin", "synth-slip-fut", "synth-slip-opt", "synth-min-net"].forEach((id) => {
   document.getElementById(id).addEventListener("change", refreshSynth);
 });
@@ -858,7 +883,7 @@ window.setInterval(() => {
     if (!document.getElementById("plan1-btn").disabled) runPlan1();
     return;
   }
-  if (state.tab === "synth" || state.tab === "callarb" || state.tab === "putarb" || state.tab === "boxarb" || state.tab === "vertce" || state.tab === "vertpe" || state.tab === "silver" || state.tab === "optrv" || state.tab === "butterfly") return;
+  if (state.tab === "synth" || state.tab === "callarb" || state.tab === "putarb" || state.tab === "boxarb" || state.tab === "vertce" || state.tab === "vertpe" || state.tab === "silver" || state.tab === "optrv" || state.tab === "butterfly" || state.tab === "calendar") return;
   if (document.getElementById("scan-btn").disabled) return;
   runScan();
 }, 120000);

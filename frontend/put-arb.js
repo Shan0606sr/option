@@ -630,6 +630,7 @@ async function startPutArbScanner() {
   if (typeof stopSilverArbScanner === "function") stopSilverArbScanner();
   if (typeof stopOptionRvScanner === "function") stopOptionRvScanner();
   if (typeof stopButterflyScanner === "function") stopButterflyScanner();
+  if (typeof stopCalendarScanner === "function") stopCalendarScanner();
   persistPutRates();
   const btn = parEl("par-btn");
   if (btn) {

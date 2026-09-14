@@ -35,6 +35,9 @@
 [functions.butterfly-arb]
   timeout = 26
 
+[functions.calendar-arb]
+  timeout = 26
+
 [functions.margins]
   timeout = 20
 
@@ -136,6 +139,11 @@
 [[redirects]]
   from = "/api/butterfly-arb"
   to = "/.netlify/functions/butterfly-arb"
+  status = 200
+
+[[redirects]]
+  from = "/api/calendar-arb"
+  to = "/.netlify/functions/calendar-arb"
   status = 200
 
 [[redirects]]

@@ -589,6 +589,7 @@ async function startVertCeScanner() {
   if (typeof stopSilverArbScanner === "function") stopSilverArbScanner();
   if (typeof stopOptionRvScanner === "function") stopOptionRvScanner();
   if (typeof stopButterflyScanner === "function") stopButterflyScanner();
+  if (typeof stopCalendarScanner === "function") stopCalendarScanner();
   persistVceRates();
   const btn = vceEl("vce-btn");
   if (btn) {

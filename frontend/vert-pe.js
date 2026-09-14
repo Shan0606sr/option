@@ -589,6 +589,7 @@ async function startVertPeScanner() {
   if (typeof stopSilverArbScanner === "function") stopSilverArbScanner();
   if (typeof stopOptionRvScanner === "function") stopOptionRvScanner();
   if (typeof stopButterflyScanner === "function") stopButterflyScanner();
+  if (typeof stopCalendarScanner === "function") stopCalendarScanner();
   persistVpeRates();
   const btn = vpeEl("vpe-btn");
   if (btn) {

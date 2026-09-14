@@ -44,6 +44,7 @@
       <button type="button" class="page-tab" data-tab="silver">Silver Arbitrage</button>
       <button type="button" class="page-tab" data-tab="optrv">Option Intelligence</button>
       <button type="button" class="page-tab" data-tab="butterfly">Butterfly</button>
+      <button type="button" class="page-tab" data-tab="calendar">Calendar mispricing</button>
     </nav>
 
     <section id="panel-index" class="index-panel">
@@ -1209,6 +1210,124 @@
         Ranked by net minimum profit, then profit / margin, then max profit, then liquidity, then quote freshness.
       </p>
     </section>
+
+    <section id="panel-calendar" hidden>
+      <div class="index-toolbar">
+        <div>
+          <h2>Synthetic Calendar Mispricing</h2>
+          <p class="index-sub">Compare executable near vs far synthetic futures (K + CE − PE) with a carry fair spread. Convergence candidate — not structural arbitrage. Identification only.</p>
+        </div>
+      </div>
+      <div id="cal-mode" class="synth-mode synth-mode-ltp" role="status">
+        <strong id="cal-mode-label">LTP / THEORETICAL</strong>
+        <span id="cal-mode-reason">Checking NSE session…</span>
+      </div>
+      <p id="cal-method" class="index-meta">Synthetic calendar: compare executable near vs far CE−PE futures with a carry fair spread. Convergence candidate, not structural arbitrage.</p>
+      <section class="controls">
+        <label class="control">
+          <span class="label">Expiry pair</span>
+          <select id="cal-pair">
+            <option value="near-next" selected>Near vs next</option>
+            <option value="next-far">Next vs far</option>
+            <option value="adjacent">All adjacent pairs</option>
+          </select>
+        </label>
+        <label class="control plan1-filter">
+          <span class="label">Underlying</span>
+          <select id="cal-stock" class="stock-select">
+            <option value="">All F&amp;O + indexes</option>
+          </select>
+        </label>
+        <label class="control">
+          <span class="label">Strike band %</span>
+          <input id="cal-band" type="number" min="0" step="0.5" value="6" />
+        </label>
+        <label class="control">
+          <span class="label">Max strikes</span>
+          <input id="cal-max-strikes" type="number" min="0" step="1" value="3" />
+        </label>
+        <label class="control">
+          <span class="label">Lots</span>
+          <input id="cal-lots" type="number" min="1" step="1" value="1" />
+        </label>
+        <label class="control">
+          <span class="label">Min |mis| ₹</span>
+          <input id="cal-filter-mis" type="number" min="0" step="0.5" value="0" />
+        </label>
+        <label class="control">
+          <span class="label">Min net ₹/lot</span>
+          <input id="cal-filter-edge" type="number" min="0" step="1" value="0" />
+        </label>
+        <label class="control">
+          <span class="label">Find stock</span>
+          <input id="cal-filter" type="text" placeholder="NIFTY" />
+        </label>
+        <fieldset class="strategies">
+          <legend class="label">Rows</legend>
+          <label class="check"><input id="cal-show-ignore" type="checkbox" /> Show ignore / incomplete</label>
+        </fieldset>
+        <button id="cal-btn" type="button" class="scan-btn">Start scanner</button>
+      </section>
+      <details class="rates-panel">
+        <summary>Carry model, Zerodha rate card, slippage and liquidity (configuration — not hard-coded)</summary>
+        <div class="rates-grid">
+          <label class="control"><span class="label">Funding r %</span><input id="cal-rate" type="number" step="0.1" value="6.5" /></label>
+          <label class="control"><span class="label">Dividend q %</span><input id="cal-div" type="number" step="0.1" value="0" /></label>
+          <label class="control"><span class="label">Delta warn</span><input id="cal-delta-warn" type="number" step="0.01" value="0.15" /></label>
+          <label class="control"><span class="label">Watch |mis| ₹</span><input id="cal-min-watch" type="number" step="0.5" value="5" /></label>
+          <label class="control"><span class="label">Trade edge ₹/sh</span><input id="cal-min-edge" type="number" step="0.5" value="1" /></label>
+          <label class="control"><span class="label">A+ |mis| ₹</span><input id="cal-aplus" type="number" step="1" value="15" /></label>
+          <label class="control"><span class="label">Min hist obs</span><input id="cal-min-hist" type="number" step="1" value="20" /></label>
+          <label class="control"><span class="label">Opt brokerage ₹</span><input id="cal-opt-brok" type="number" step="1" value="20" /></label>
+          <label class="control"><span class="label">Opt STT sell %</span><input id="cal-opt-stt" type="number" step="0.01" value="0.15" /></label>
+          <label class="control"><span class="label">Opt exercise STT %</span><input id="cal-opt-ex-stt" type="number" step="0.01" value="0.15" /></label>
+          <label class="control"><span class="label">Opt txn %</span><input id="cal-opt-txn" type="number" step="0.00001" value="0.03553" /></label>
+          <label class="control"><span class="label">Opt stamp buy %</span><input id="cal-opt-stamp" type="number" step="0.0001" value="0.003" /></label>
+          <label class="control"><span class="label">GST %</span><input id="cal-gst" type="number" step="0.1" value="18" /></label>
+          <label class="control"><span class="label">SEBI ₹/crore</span><input id="cal-sebi" type="number" step="1" value="10" /></label>
+          <label class="control"><span class="label">Slippage ₹/sh</span><input id="cal-slip" type="number" step="0.05" value="0.50" /></label>
+          <label class="control"><span class="label">Slippage × spread</span><input id="cal-slip-spread" type="number" step="0.05" value="0.25" /></label>
+          <label class="control"><span class="label">Stale quote ms</span><input id="cal-stale" type="number" step="100" value="2500" /></label>
+          <label class="control"><span class="label">Snapshot span ms</span><input id="cal-snap" type="number" step="100" value="1500" /></label>
+          <label class="control"><span class="label">Max opt spread %</span><input id="cal-opt-spread" type="number" step="0.1" value="8" /></label>
+          <label class="check rates-check"><input id="cal-include-ex" type="checkbox" /> Include bought-and-exercised option STT</label>
+        </div>
+      </details>
+      <p id="cal-status" class="index-meta">Idle · scanner does not place orders</p>
+      <main class="table-wrap">
+        <table class="results cal-table">
+          <thead>
+            <tr>
+              <th>Underlying</th>
+              <th>Near</th>
+              <th>Far</th>
+              <th class="num">Strike</th>
+              <th class="num">Current spread</th>
+              <th class="num">Fair spread</th>
+              <th class="num">Mispricing</th>
+              <th class="num">Mis %</th>
+              <th class="num">Net delta</th>
+              <th class="num">Net edge</th>
+              <th class="num">Qty</th>
+              <th>Confidence</th>
+              <th>Should I trade?</th>
+            </tr>
+          </thead>
+          <tbody id="cal-body"></tbody>
+        </table>
+        <p id="cal-empty" class="empty">Start the scanner to compare near vs far synthetic futures on NIFTY and F&amp;O stocks.</p>
+      </main>
+      <p class="footnote">
+        For the same strike: synthetic future = K + CE − PE, with carry DF = e<sup>rT</sup> when funding r ≠ 0.
+        Current spread = Far synth − Near synth using executable bid/ask (buy ask / sell bid).
+        Fair spread uses spot (or the near listed future) × e<sup>(r−q)T</sup>.
+        Direction A buys the near synthetic and sells the far synthetic; B is the reverse — four option legs.
+        Net calendar delta should be near 0; a material delta is a warning, not the trigger.
+        Rank by grade, then |net edge|, then |mispricing|, then liquidity.
+        <strong>HIGH-CONFIDENCE</strong> means scanner conditions passed. It is not a locked payoff like a box or a positive-credit butterfly.
+        Historical percentile fills in after stored observations on this browser; it is never invented from one snapshot.
+      </p>
+    </section>
   </div>
 
   <aside id="drawer" class="drawer" hidden>
@@ -1237,7 +1356,9 @@
   <script src="silver-arb.js"></script>
   <script src="option-rv-engine.js"></script>
   <script src="option-rv.js"></script>
+  <script src="calendar-engine.js"></script>
   <script src="butterfly.js"></script>
+  <script src="calendar.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

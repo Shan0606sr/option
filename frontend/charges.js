@@ -564,6 +564,50 @@
     };
   }
 
+  function calendarCharges({ buyNear, nearCe, nearPe, farCe, farPe, qty, rates }) {
+    const r = mergeRates(rates);
+    const size = num(qty);
+    const longNear = Boolean(buyNear);
+    return sumLegs([
+      optionLeg({ name: "Near CE", side: longNear ? "BUY" : "SELL", premium: nearCe, qty: size, intrinsic: 0, rates: r }),
+      optionLeg({ name: "Near PE", side: longNear ? "SELL" : "BUY", premium: nearPe, qty: size, intrinsic: 0, rates: r }),
+      optionLeg({ name: "Far CE", side: longNear ? "SELL" : "BUY", premium: farCe, qty: size, intrinsic: 0, rates: r }),
+      optionLeg({ name: "Far PE", side: longNear ? "BUY" : "SELL", premium: farPe, qty: size, intrinsic: 0, rates: r }),
+    ]);
+  }
+
+  function calendarSlippagePerShare({
+    nearCeBid, nearCeAsk, nearPeBid, nearPeAsk,
+    farCeBid, farCeAsk, farPeBid, farPeAsk, rates,
+  }) {
+    const r = mergeRates(rates);
+    const spread = (bid, ask) => Math.max(0, num(ask) - num(bid));
+    const fromBook = (
+      spread(nearCeBid, nearCeAsk) + spread(nearPeBid, nearPeAsk)
+      + spread(farCeBid, farCeAsk) + spread(farPeBid, farPeAsk)
+    ) * num(r.slipSpreadFrac);
+    return num(r.slippageInr) + fromBook;
+  }
+
+  function estimateCalendarMargins({ strike, tNear, tFar, lot, lots }) {
+    const qty = num(lot) * num(lots, 1);
+    const tenor = Math.max(num(tFar) - num(tNear), 7 / 365.25);
+    const combined = Math.max(num(strike) * qty * 0.02 * tenor * 12, qty * 50);
+    return {
+      combined: round2(combined),
+      required: round2(combined),
+      uncertain: true,
+      source: "estimate",
+    };
+  }
+
+  function calendarMethodology() {
+    return {
+      id: "calendar-mispricing",
+      label: "Four option legs: buy/sell near synthetic vs far synthetic. Convergence candidate after costs — not a locked payoff.",
+    };
+  }
+
   function unitsPerKg(gramsPerUnit) {
     const grams = num(gramsPerUnit);
     return grams > 0 ? 1000 / grams : 0;
@@ -747,6 +791,10 @@
     butterflySlippagePerShare,
     estimateButterflyMargins,
     butterflyMethodology,
+    calendarCharges,
+    calendarSlippagePerShare,
+    estimateCalendarMargins,
+    calendarMethodology,
     unitsPerKg,
     etfPerKg,
     silverHedge,

@@ -668,6 +668,7 @@ async function startButterflyScanner() {
   if (typeof stopVertPeScanner === "function") stopVertPeScanner();
   if (typeof stopSilverArbScanner === "function") stopSilverArbScanner();
   if (typeof stopOptionRvScanner === "function") stopOptionRvScanner();
+  if (typeof stopCalendarScanner === "function") stopCalendarScanner();
   persistBflyRates();
   const btn = bflyEl("bfly-btn");
   if (btn) {
