@@ -352,6 +352,7 @@ function showTab(tab) {
   document.getElementById("panel-vertpe").hidden = tab !== "vertpe";
   document.getElementById("panel-silver").hidden = tab !== "silver";
   document.getElementById("panel-orv").hidden = tab !== "optrv";
+  document.getElementById("panel-butterfly").hidden = tab !== "butterfly";
 }
 
 async function consumeKiteRedirect() {
@@ -615,6 +616,11 @@ document.querySelectorAll(".page-tab").forEach((btn) => {
       else refreshOptionRv();
       return;
     }
+    if (btn.dataset.tab === "butterfly") {
+      if (state.connected && !bflyState.started) await startButterflyScanner();
+      else refreshButterfly();
+      return;
+    }
     if (state.connected && !state.scanned) {
       state.scanned = true;
       await runScan();
@@ -665,6 +671,7 @@ async function logoutZerodha() {
   stopVertPeScanner();
   stopSilverArbScanner();
   stopOptionRvScanner();
+  stopButterflyScanner();
 }
 
 document.getElementById("logout-btn").addEventListener("click", logoutZerodha);
@@ -692,6 +699,7 @@ document.getElementById("vce-btn").addEventListener("click", startVertCeScanner)
 document.getElementById("vpe-btn").addEventListener("click", startVertPeScanner);
 document.getElementById("sil-btn").addEventListener("click", startSilverArbScanner);
 document.getElementById("orv-btn").addEventListener("click", startOptionRvScanner);
+document.getElementById("bfly-btn").addEventListener("click", startButterflyScanner);
 [
   "car-min-net", "car-min-rom", "car-min-edge", "car-filter", "car-lots", "car-df",
   "car-slip", "car-slip-spread", "car-side-a", "car-side-b", "car-show-no",
@@ -811,6 +819,23 @@ document.querySelectorAll("#panel-orv input, #panel-orv select").forEach((el) =>
     refreshOptionRv();
   });
 });
+[
+  "bfly-min-net", "bfly-min-rom", "bfly-min-credit", "bfly-filter", "bfly-lots",
+  "bfly-slip", "bfly-slip-spread", "bfly-show-no", "bfly-ce", "bfly-pe",
+].forEach((id) => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener("input", refreshButterfly);
+});
+document.querySelectorAll("#panel-butterfly input, #panel-butterfly select").forEach((el) => {
+  el.addEventListener("change", () => {
+    persistButterflyRates();
+    if (el.id === "bfly-expiry" || el.id === "bfly-stock" || el.id === "bfly-band" || el.id === "bfly-max-strikes") {
+      if (state.connected) startButterflyScanner();
+      return;
+    }
+    refreshButterfly();
+  });
+});
 ["synth-allin", "synth-slip-fut", "synth-slip-opt", "synth-min-net"].forEach((id) => {
   document.getElementById(id).addEventListener("change", refreshSynth);
 });
@@ -833,7 +858,7 @@ window.setInterval(() => {
     if (!document.getElementById("plan1-btn").disabled) runPlan1();
     return;
   }
-  if (state.tab === "synth" || state.tab === "callarb" || state.tab === "putarb" || state.tab === "boxarb" || state.tab === "vertce" || state.tab === "vertpe" || state.tab === "silver" || state.tab === "optrv") return;
+  if (state.tab === "synth" || state.tab === "callarb" || state.tab === "putarb" || state.tab === "boxarb" || state.tab === "vertce" || state.tab === "vertpe" || state.tab === "silver" || state.tab === "optrv" || state.tab === "butterfly") return;
   if (document.getElementById("scan-btn").disabled) return;
   runScan();
 }, 120000);

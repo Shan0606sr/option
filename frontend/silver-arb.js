@@ -544,6 +544,7 @@ async function startSilverArbScanner() {
   if (typeof stopVertCeScanner === "function") stopVertCeScanner();
   if (typeof stopVertPeScanner === "function") stopVertPeScanner();
   if (typeof stopOptionRvScanner === "function") stopOptionRvScanner();
+  if (typeof stopButterflyScanner === "function") stopButterflyScanner();
   persistSilRates();
   const btn = silEl("sil-btn");
   if (btn) {

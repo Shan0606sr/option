@@ -59,6 +59,7 @@ const API = {
   "/api/vert-pe": "vert-pe",
   "/api/silver-arb": "silver-arb",
   "/api/option-rv": "option-rv",
+  "/api/butterfly-arb": "butterfly-arb",
   "/api/margins": "margins",
 };
 

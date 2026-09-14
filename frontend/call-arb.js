@@ -624,6 +624,7 @@ async function startCallArbScanner() {
   if (typeof stopVertPeScanner === "function") stopVertPeScanner();
   if (typeof stopSilverArbScanner === "function") stopSilverArbScanner();
   if (typeof stopOptionRvScanner === "function") stopOptionRvScanner();
+  if (typeof stopButterflyScanner === "function") stopButterflyScanner();
   persistRates();
   const btn = carEl("car-btn");
   if (btn) {

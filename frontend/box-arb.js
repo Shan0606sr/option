@@ -635,6 +635,7 @@ async function startBoxArbScanner() {
   if (typeof stopVertPeScanner === "function") stopVertPeScanner();
   if (typeof stopSilverArbScanner === "function") stopSilverArbScanner();
   if (typeof stopOptionRvScanner === "function") stopOptionRvScanner();
+  if (typeof stopButterflyScanner === "function") stopButterflyScanner();
   persistBoxRates();
   const btn = boxEl("box-btn");
   if (btn) {

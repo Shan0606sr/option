@@ -318,6 +318,7 @@ async function startSynthScanner() {
   if (typeof stopVertPeScanner === "function") stopVertPeScanner();
   if (typeof stopSilverArbScanner === "function") stopSilverArbScanner();
   if (typeof stopOptionRvScanner === "function") stopOptionRvScanner();
+  if (typeof stopButterflyScanner === "function") stopButterflyScanner();
   const expiry = document.getElementById("synth-expiry").value || "nearest";
   const btn = document.getElementById("synth-btn");
   btn.disabled = true;

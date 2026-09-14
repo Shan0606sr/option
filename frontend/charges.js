@@ -488,6 +488,82 @@
     };
   }
 
+  function butterflyWidth(k1, k2, k3) {
+    const d1 = num(k2) - num(k1);
+    const d2 = num(k3) - num(k2);
+    if (!(d1 > 0) || Math.abs(d1 - d2) > 1e-6) return 0;
+    return d1;
+  }
+
+  function butterflyGrossCredit(wingAskLow, bodyBid, wingAskHigh) {
+    return 2 * num(bodyBid) - num(wingAskLow) - num(wingAskHigh);
+  }
+
+  function callButterflyPayoff(spot, k1, k2, k3) {
+    return Math.max(num(spot) - num(k1), 0) - 2 * Math.max(num(spot) - num(k2), 0) + Math.max(num(spot) - num(k3), 0);
+  }
+
+  function putButterflyPayoff(spot, k1, k2, k3) {
+    return Math.max(num(k1) - num(spot), 0) - 2 * Math.max(num(k2) - num(spot), 0) + Math.max(num(k3) - num(spot), 0);
+  }
+
+  function butterflyPayoffSanity(k1, k2, k3) {
+    const width = butterflyWidth(k1, k2, k3);
+    if (!(width > 0)) return { ok: false, width, samples: [] };
+    const spots = [num(k1) - width, num(k1), num(k2), num(k3), num(k3) + width, (num(k1) + num(k2)) / 2];
+    const samples = spots.map((spot) => ({
+      spot,
+      call: round2(callButterflyPayoff(spot, k1, k2, k3)),
+      put: round2(putButterflyPayoff(spot, k1, k2, k3)),
+    }));
+    const ok = samples.every((row) => row.call >= -1e-9 && row.call <= width + 1e-9
+      && row.put >= -1e-9 && row.put <= width + 1e-9)
+      && Math.abs(callButterflyPayoff(k2, k1, k2, k3) - width) < 1e-6
+      && Math.abs(putButterflyPayoff(k2, k1, k2, k3) - width) < 1e-6
+      && Math.abs(callButterflyPayoff(k1 - width, k1, k2, k3)) < 1e-6
+      && Math.abs(putButterflyPayoff(k3 + width, k1, k2, k3)) < 1e-6;
+    return { ok, width, samples };
+  }
+
+  function butterflyCharges({ isCall, k1Px, k2Px, k3Px, qty, rates }) {
+    const r = mergeRates(rates);
+    const size = num(qty);
+    const kind = isCall ? "CE" : "PE";
+    return sumLegs([
+      optionLeg({ name: `K1 ${kind}`, side: "BUY", premium: k1Px, qty: size, intrinsic: 0, rates: r }),
+      optionLeg({ name: `K2 ${kind}`, side: "SELL", premium: k2Px, qty: size * 2, intrinsic: 0, rates: r }),
+      optionLeg({ name: `K3 ${kind}`, side: "BUY", premium: k3Px, qty: size, intrinsic: 0, rates: r }),
+    ]);
+  }
+
+  function butterflySlippagePerShare({ k1Bid, k1Ask, k2Bid, k2Ask, k3Bid, k3Ask, rates }) {
+    const r = mergeRates(rates);
+    const spread = (bid, ask) => Math.max(0, num(ask) - num(bid));
+    return num(r.slippageInr) + (spread(k1Bid, k1Ask) + 2 * spread(k2Bid, k2Ask) + spread(k3Bid, k3Ask)) * num(r.slipSpreadFrac);
+  }
+
+  function estimateButterflyMargins({ k1, k2, k3, credit, lot, lots }) {
+    const qty = num(lot) * num(lots, 1);
+    const width = butterflyWidth(k1, k2, k3);
+    const creditInr = num(credit) * qty;
+    const widthNotional = Math.max(0, width) * qty;
+    const debit = Math.max(0, -creditInr);
+    const combined = debit + Math.max(widthNotional * 0.1, widthNotional * 0.25 - Math.max(0, creditInr));
+    return {
+      combined: round2(combined),
+      required: round2(combined),
+      uncertain: true,
+      source: "estimate",
+    };
+  }
+
+  function butterflyMethodology() {
+    return {
+      id: "butterfly",
+      label: "Butterfly: buy K1 ask, sell 2× K2 bid, buy K3 ask. Equidistant strikes. Confirm only net credit after costs.",
+    };
+  }
+
   function unitsPerKg(gramsPerUnit) {
     const grams = num(gramsPerUnit);
     return grams > 0 ? 1000 / grams : 0;
@@ -662,6 +738,15 @@
     twoLegPutVerticalCharges,
     estimatePutVerticalMargins,
     putVerticalMethodology,
+    butterflyWidth,
+    butterflyGrossCredit,
+    callButterflyPayoff,
+    putButterflyPayoff,
+    butterflyPayoffSanity,
+    butterflyCharges,
+    butterflySlippagePerShare,
+    estimateButterflyMargins,
+    butterflyMethodology,
     unitsPerKg,
     etfPerKg,
     silverHedge,

@@ -460,6 +460,7 @@ select.stock-select { width: 220px; }
 .results.vpe-table { min-width: 1600px; }
 .results.sil-table { min-width: 1100px; }
 .results.orv-table { min-width: 1880px; }
+.results.bfly-table { min-width: 1960px; }
 
 .drawer.wide { width: min(560px, 100%); }
 

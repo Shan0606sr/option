@@ -43,6 +43,7 @@
       <button type="button" class="page-tab" data-tab="vertpe">Vertical PE</button>
       <button type="button" class="page-tab" data-tab="silver">Silver Arbitrage</button>
       <button type="button" class="page-tab" data-tab="optrv">Option Intelligence</button>
+      <button type="button" class="page-tab" data-tab="butterfly">Butterfly</button>
     </nav>
 
     <section id="panel-index" class="index-panel">
@@ -1080,6 +1081,134 @@
         Z-score is blank until enough stored residuals exist — it is never invented from one snapshot.
       </p>
     </section>
+
+    <section id="panel-butterfly" hidden>
+      <div class="index-toolbar">
+        <div>
+          <h2>Butterfly Arbitrage Scanner</h2>
+          <p class="index-sub">Buy K1 ask, sell 2× K2 bid, buy K3 ask. Equidistant strikes only. Confirm only a positive net credit after costs. Identification only — no orders are sent.</p>
+        </div>
+      </div>
+      <div id="bfly-mode" class="synth-mode synth-mode-ltp" role="status">
+        <strong id="bfly-mode-label">LTP / THEORETICAL</strong>
+        <span id="bfly-mode-reason">Checking NSE session…</span>
+      </div>
+      <p id="bfly-method" class="index-meta">Butterfly: buy K1 ask, sell 2× K2 bid, buy K3 ask. Equidistant strikes. Confirm only net credit after costs.</p>
+      <section class="controls">
+        <label class="control">
+          <span class="label">Expiry</span>
+          <select id="bfly-expiry">
+            <option value="nearest" selected>Nearest</option>
+            <option value="next">Next</option>
+          </select>
+        </label>
+        <label class="control plan1-filter">
+          <span class="label">Underlying</span>
+          <select id="bfly-stock" class="stock-select">
+            <option value="">All F&amp;O + indexes</option>
+          </select>
+        </label>
+        <label class="control">
+          <span class="label">Strike band %</span>
+          <input id="bfly-band" type="number" min="0" step="0.5" value="6" />
+        </label>
+        <label class="control">
+          <span class="label">Max strikes</span>
+          <input id="bfly-max-strikes" type="number" min="0" step="1" value="5" />
+        </label>
+        <label class="control">
+          <span class="label">Lots</span>
+          <input id="bfly-lots" type="number" min="1" step="1" value="1" />
+        </label>
+        <label class="control">
+          <span class="label">Min net ₹/lot</span>
+          <input id="bfly-min-net" type="number" min="0" step="1" value="0" />
+        </label>
+        <label class="control">
+          <span class="label">Min RoM %</span>
+          <input id="bfly-min-rom" type="number" min="0" step="0.01" value="0" />
+        </label>
+        <label class="control">
+          <span class="label">Min gross credit ₹</span>
+          <input id="bfly-min-credit" type="number" min="0" step="0.05" value="0" />
+        </label>
+        <label class="control">
+          <span class="label">Find stock</span>
+          <input id="bfly-filter" type="text" placeholder="NIFTY" />
+        </label>
+        <fieldset class="strategies">
+          <legend class="label">Scan</legend>
+          <label class="check"><input id="bfly-ce" type="checkbox" checked /> Call butterflies</label>
+          <label class="check"><input id="bfly-pe" type="checkbox" checked /> Put butterflies</label>
+          <label class="check"><input id="bfly-show-no" type="checkbox" /> Show no-arb / incomplete</label>
+        </fieldset>
+        <button id="bfly-btn" type="button" class="scan-btn">Start scanner</button>
+      </section>
+      <details class="rates-panel">
+        <summary>Zerodha rate card, slippage and liquidity (configuration — not hard-coded in the scanner)</summary>
+        <div class="rates-grid">
+          <label class="control"><span class="label">Opt brokerage ₹</span><input id="bfly-opt-brok" type="number" step="1" value="20" /></label>
+          <label class="control"><span class="label">Opt STT sell %</span><input id="bfly-opt-stt" type="number" step="0.01" value="0.15" /></label>
+          <label class="control"><span class="label">Opt exercise STT %</span><input id="bfly-opt-ex-stt" type="number" step="0.01" value="0.15" /></label>
+          <label class="control"><span class="label">Opt txn %</span><input id="bfly-opt-txn" type="number" step="0.00001" value="0.03553" /></label>
+          <label class="control"><span class="label">Opt stamp buy %</span><input id="bfly-opt-stamp" type="number" step="0.0001" value="0.003" /></label>
+          <label class="control"><span class="label">GST %</span><input id="bfly-gst" type="number" step="0.1" value="18" /></label>
+          <label class="control"><span class="label">SEBI ₹/crore</span><input id="bfly-sebi" type="number" step="1" value="10" /></label>
+          <label class="control"><span class="label">Slippage ₹/sh</span><input id="bfly-slip" type="number" step="0.05" value="0.50" /></label>
+          <label class="control"><span class="label">Slippage × spread</span><input id="bfly-slip-spread" type="number" step="0.05" value="0.25" /></label>
+          <label class="control"><span class="label">Stale quote ms</span><input id="bfly-stale" type="number" step="100" value="2500" /></label>
+          <label class="control"><span class="label">Snapshot span ms</span><input id="bfly-snap" type="number" step="100" value="1500" /></label>
+          <label class="control"><span class="label">Max opt spread %</span><input id="bfly-opt-spread" type="number" step="0.1" value="8" /></label>
+          <label class="check rates-check"><input id="bfly-include-ex" type="checkbox" /> Include bought-and-exercised option STT</label>
+        </div>
+      </details>
+      <p id="bfly-status" class="index-meta">Idle · scanner does not place orders</p>
+      <main class="table-wrap">
+        <table class="results bfly-table">
+          <thead>
+            <tr>
+              <th>Underlying</th>
+              <th>Expiry</th>
+              <th>Type</th>
+              <th class="num">K1</th>
+              <th class="num">K2</th>
+              <th class="num">K3</th>
+              <th class="num">Width</th>
+              <th class="num">K1 ask</th>
+              <th class="num">K2 bid</th>
+              <th class="num">K3 ask</th>
+              <th class="num">Gross credit</th>
+              <th class="num">Charges</th>
+              <th class="num">Slippage</th>
+              <th class="num">Net / lot</th>
+              <th class="num">Qty</th>
+              <th class="num">Min profit</th>
+              <th class="num">Max profit</th>
+              <th class="num">Max risk</th>
+              <th class="num">Margin</th>
+              <th class="num">RoM</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="bfly-body"></tbody>
+        </table>
+        <p id="bfly-empty" class="empty">Start the scanner to test every equidistant K1/K2/K3 Call and Put butterfly: buy K1 ask, sell 2× K2 bid, buy K3 ask, confirm only net credit after costs.</p>
+      </main>
+      <p class="footnote">
+        Long butterfly: <strong>BUY</strong> K1 at ask, <strong>SELL 2×</strong> K2 at bid, <strong>BUY</strong> K3 at ask.
+        Strikes must be equidistant (K2 − K1 = K3 − K2). Every valid width is scanned — not only adjacent strikes.
+        Calls and Puts are scanned separately. Exchanges, underlyings and expiries are never mixed inside one butterfly.
+        Gross credit = 2 × K2 bid − K1 ask − K3 ask. Confirmed only if net credit &gt; 0 after brokerage, taxes, exchange charges and configured slippage.
+        Quantity must cover 1 × K1, 2 × K2 and 1 × K3. Each price is tagged <strong>(B)</strong> buy or <strong>(S)</strong> sell.
+        During market hours only WebSocket bid/ask from the same snapshot can become
+        <strong>🟢 CONFIRMED ARBITRAGE</strong>. After hours LTP credit is
+        <strong>🟡 POTENTIAL</strong> and can never be confirmed.
+        If net credit &gt; 0, expiry payoff of the butterfly itself is never negative, so maximum expiry payoff loss is ₹0*.
+        That does not remove execution, settlement, assignment or operational risk.
+        Margin marked * is an estimate until Zerodha basket margin returns.
+        Ranked by net minimum profit, then profit / margin, then max profit, then liquidity, then quote freshness.
+      </p>
+    </section>
   </div>
 
   <aside id="drawer" class="drawer" hidden>
@@ -1108,6 +1237,7 @@
   <script src="silver-arb.js"></script>
   <script src="option-rv-engine.js"></script>
   <script src="option-rv.js"></script>
+  <script src="butterfly.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

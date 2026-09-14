@@ -583,6 +583,7 @@ async function startOptionRvScanner() {
   if (typeof stopVertCeScanner === "function") stopVertCeScanner();
   if (typeof stopVertPeScanner === "function") stopVertPeScanner();
   if (typeof stopSilverArbScanner === "function") stopSilverArbScanner();
+  if (typeof stopButterflyScanner === "function") stopButterflyScanner();
   persistOrvRates();
   const btn = orvEl("orv-btn");
   if (btn) {
