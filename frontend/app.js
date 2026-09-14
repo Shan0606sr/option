@@ -350,6 +350,8 @@ function showTab(tab) {
   document.getElementById("panel-boxarb").hidden = tab !== "boxarb";
   document.getElementById("panel-vertce").hidden = tab !== "vertce";
   document.getElementById("panel-vertpe").hidden = tab !== "vertpe";
+  document.getElementById("panel-silver").hidden = tab !== "silver";
+  document.getElementById("panel-orv").hidden = tab !== "optrv";
 }
 
 async function consumeKiteRedirect() {
@@ -603,6 +605,16 @@ document.querySelectorAll(".page-tab").forEach((btn) => {
       else refreshVertPe();
       return;
     }
+    if (btn.dataset.tab === "silver") {
+      if (state.connected && !silState.started) await startSilverArbScanner();
+      else refreshSilverArb();
+      return;
+    }
+    if (btn.dataset.tab === "optrv") {
+      if (state.connected && !orvState.started) await startOptionRvScanner();
+      else refreshOptionRv();
+      return;
+    }
     if (state.connected && !state.scanned) {
       state.scanned = true;
       await runScan();
@@ -651,6 +663,8 @@ async function logoutZerodha() {
   stopBoxArbScanner();
   stopVertCeScanner();
   stopVertPeScanner();
+  stopSilverArbScanner();
+  stopOptionRvScanner();
 }
 
 document.getElementById("logout-btn").addEventListener("click", logoutZerodha);
@@ -676,6 +690,8 @@ document.getElementById("par-btn").addEventListener("click", startPutArbScanner)
 document.getElementById("box-btn").addEventListener("click", startBoxArbScanner);
 document.getElementById("vce-btn").addEventListener("click", startVertCeScanner);
 document.getElementById("vpe-btn").addEventListener("click", startVertPeScanner);
+document.getElementById("sil-btn").addEventListener("click", startSilverArbScanner);
+document.getElementById("orv-btn").addEventListener("click", startOptionRvScanner);
 [
   "car-min-net", "car-min-rom", "car-min-edge", "car-filter", "car-lots", "car-df",
   "car-slip", "car-slip-spread", "car-side-a", "car-side-b", "car-show-no",
@@ -761,6 +777,40 @@ document.querySelectorAll("#panel-vertpe input, #panel-vertpe select").forEach((
     refreshVertPe();
   });
 });
+[
+  "sil-min-net", "sil-lots", "sil-grams", "sil-nav", "sil-side-a", "sil-side-b", "sil-show-no",
+  "sil-slip", "sil-slip-spread",
+].forEach((id) => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener("input", refreshSilverArb);
+});
+document.querySelectorAll("#panel-silver input, #panel-silver select").forEach((el) => {
+  el.addEventListener("change", () => {
+    persistSilverRates();
+    if (el.id === "sil-etf" || el.id === "sil-fut") {
+      if (state.connected) startSilverArbScanner();
+      return;
+    }
+    refreshSilverArb();
+  });
+});
+[
+  "orv-min-res", "orv-min-mis", "orv-min-score", "orv-filter",
+  "orv-ce-cheap", "orv-ce-exp", "orv-pe-cheap", "orv-pe-exp", "orv-show-normal",
+].forEach((id) => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener("input", refreshOptionRv);
+});
+document.querySelectorAll("#panel-orv input, #panel-orv select").forEach((el) => {
+  el.addEventListener("change", () => {
+    persistOptionRvRates();
+    if (el.id === "orv-expiry" || el.id === "orv-stock" || el.id === "orv-band" || el.id === "orv-max-strikes") {
+      if (state.connected) startOptionRvScanner();
+      return;
+    }
+    refreshOptionRv();
+  });
+});
 ["synth-allin", "synth-slip-fut", "synth-slip-opt", "synth-min-net"].forEach((id) => {
   document.getElementById(id).addEventListener("change", refreshSynth);
 });
@@ -783,7 +833,7 @@ window.setInterval(() => {
     if (!document.getElementById("plan1-btn").disabled) runPlan1();
     return;
   }
-  if (state.tab === "synth" || state.tab === "callarb" || state.tab === "putarb" || state.tab === "boxarb" || state.tab === "vertce" || state.tab === "vertpe") return;
+  if (state.tab === "synth" || state.tab === "callarb" || state.tab === "putarb" || state.tab === "boxarb" || state.tab === "vertce" || state.tab === "vertpe" || state.tab === "silver" || state.tab === "optrv") return;
   if (document.getElementById("scan-btn").disabled) return;
   runScan();
 }, 120000);

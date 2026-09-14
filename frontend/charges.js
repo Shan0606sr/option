@@ -25,6 +25,38 @@
     maxFutSpreadPct: 0.2,
     discountFactor: 1,
     lots: 1,
+    eq: {
+      brokeragePct: 0,
+      brokerageCap: 0,
+      sttPct: 0.1,
+      txnPct: 0.00297,
+      stampBuyPct: 0.015,
+    },
+    mcx: {
+      brokeragePct: 0.03,
+      brokerageCap: 20,
+      cttSellPct: 0.01,
+      txnPct: 0.0026,
+      stampBuyPct: 0.002,
+    },
+    silver: {
+      gramsPerUnit: 1,
+      kgPerFutLot: 1,
+      nav: 0,
+      minGrossPct: 3,
+      targetPct: 5,
+      strongPct: 6,
+      exceptionalPct: 8,
+      maxNavDevPct: 2,
+      syncMs: 30000,
+      fundingPct: 0,
+      marginPct: 6,
+      mtmBufferPct: 5,
+      slippageInrPerKg: 50,
+      slipSpreadFrac: 0.25,
+      maxEtfSpreadPct: 1,
+      maxFutSpreadPct: 0.5,
+    },
   };
 
   function pct(rate) {
@@ -43,6 +75,9 @@
       ...src,
       fut: { ...DEFAULT_RATES.fut, ...(src.fut || {}) },
       opt: { ...DEFAULT_RATES.opt, ...(src.opt || {}) },
+      eq: { ...DEFAULT_RATES.eq, ...(src.eq || {}) },
+      mcx: { ...DEFAULT_RATES.mcx, ...(src.mcx || {}) },
+      silver: { ...DEFAULT_RATES.silver, ...(src.silver || {}) },
     };
   }
 
@@ -453,6 +488,146 @@
     };
   }
 
+  function unitsPerKg(gramsPerUnit) {
+    const grams = num(gramsPerUnit);
+    return grams > 0 ? 1000 / grams : 0;
+  }
+
+  function etfPerKg(pricePerUnit, gramsPerUnit) {
+    return num(pricePerUnit) * unitsPerKg(gramsPerUnit);
+  }
+
+  function silverHedge({ gramsPerUnit, futLotSize, kgPerFutLot, lots }) {
+    const lot = Math.max(1, num(futLotSize, 1));
+    const kgEach = num(kgPerFutLot, 1);
+    const n = Math.max(1, num(lots, 1));
+    const kg = lot * kgEach * n;
+    return {
+      kg,
+      etfUnits: unitsPerKg(gramsPerUnit) * kg,
+      futQty: lot * n,
+    };
+  }
+
+  function annualizeSimple(grossPct, days) {
+    if (!(num(days) > 0)) return 0;
+    return num(grossPct) * 365 / num(days);
+  }
+
+  function annualizeCompound(grossPct, days) {
+    if (!(num(days) > 0)) return 0;
+    return (Math.pow(1 + num(grossPct) / 100, 365 / num(days)) - 1) * 100;
+  }
+
+  function navPremiumPct(price, nav) {
+    if (!(num(nav) > 0)) return null;
+    return (num(price) - num(nav)) / num(nav) * 100;
+  }
+
+  function equityDeliveryLeg({ name, side, price, qty, rates }) {
+    const r = mergeRates(rates);
+    const px = num(price);
+    const size = num(qty);
+    const turnover = px * size;
+    const buy = String(side).toUpperCase() === "BUY";
+    const rawBrok = turnover * pct(r.eq.brokeragePct);
+    const brokerage = num(r.eq.brokerageCap) > 0 ? Math.min(rawBrok, num(r.eq.brokerageCap)) : rawBrok;
+    const stt = turnover * pct(r.eq.sttPct);
+    const txn = turnover * pct(r.eq.txnPct);
+    const sebi = sebiCharge(turnover, r.sebiPerCrore);
+    const stamp = buy ? turnover * pct(r.eq.stampBuyPct) : 0;
+    const gst = gstOn(brokerage, sebi, txn, r.gstPct);
+    return finishLeg({
+      name: name || "ETF",
+      side: buy ? "BUY" : "SELL",
+      price: px,
+      qty: size,
+      turnover: round2(turnover),
+      brokerage: round2(brokerage),
+      stt: round2(stt),
+      txn: round2(txn),
+      sebi: round2(sebi),
+      stamp: round2(stamp),
+      gst: round2(gst),
+      total: 0,
+    });
+  }
+
+  function commodityFutureLeg({ name, side, price, qty, rates }) {
+    const r = mergeRates(rates);
+    const px = num(price);
+    const size = num(qty);
+    const turnover = px * size;
+    const buy = String(side).toUpperCase() === "BUY";
+    const brokerage = Math.min(turnover * pct(r.mcx.brokeragePct), num(r.mcx.brokerageCap));
+    const ctt = buy ? 0 : turnover * pct(r.mcx.cttSellPct);
+    const txn = turnover * pct(r.mcx.txnPct);
+    const sebi = sebiCharge(turnover, r.sebiPerCrore);
+    const stamp = buy ? turnover * pct(r.mcx.stampBuyPct) : 0;
+    const gst = gstOn(brokerage, sebi, txn, r.gstPct);
+    return finishLeg({
+      name: name || "MCX FUT",
+      side: buy ? "BUY" : "SELL",
+      price: px,
+      qty: size,
+      turnover: round2(turnover),
+      brokerage: round2(brokerage),
+      stt: round2(ctt),
+      txn: round2(txn),
+      sebi: round2(sebi),
+      stamp: round2(stamp),
+      gst: round2(gst),
+      total: 0,
+    });
+  }
+
+  function silverSpreadCharges({ buyEtf, etfPx, futPx, etfQty, futQty, rates }) {
+    return sumLegs([
+      equityDeliveryLeg({ name: "ETF", side: buyEtf ? "BUY" : "SELL", premium: etfPx, price: etfPx, qty: etfQty, rates }),
+      commodityFutureLeg({ name: "MCX FUT", side: buyEtf ? "SELL" : "BUY", price: futPx, qty: futQty, rates }),
+    ]);
+  }
+
+  function silverSlippagePerKg({ etfBid, etfAsk, futBid, futAsk, gramsPerUnit, rates }) {
+    const r = mergeRates(rates);
+    const units = unitsPerKg(gramsPerUnit);
+    const etfSpreadKg = Math.max(0, num(etfAsk) - num(etfBid)) * units;
+    const futSpreadKg = Math.max(0, num(futAsk) - num(futBid));
+    return num(r.silver.slippageInrPerKg) + (etfSpreadKg + futSpreadKg) * num(r.silver.slipSpreadFrac);
+  }
+
+  function estimateSilverCapital({ etfPx, futPx, etfQty, futQty, kg, rates }) {
+    const r = mergeRates(rates);
+    const etfCapital = Math.max(0, num(etfPx) * num(etfQty));
+    const futNotional = Math.max(0, num(futPx) * num(futQty));
+    const futMargin = futNotional * pct(r.silver.marginPct);
+    const mtmBuffer = futNotional * pct(r.silver.mtmBufferPct);
+    const required = etfCapital + futMargin + mtmBuffer;
+    return {
+      etfCapital: round2(etfCapital),
+      futNotional: round2(futNotional),
+      futMargin: round2(futMargin),
+      mtmBuffer: round2(mtmBuffer),
+      required: round2(required),
+      kg: num(kg),
+      uncertain: true,
+      source: "estimate",
+    };
+  }
+
+  function silverFundingCost({ capital, days, rates }) {
+    const r = mergeRates(rates);
+    if (!(num(days) > 0) || !(num(capital) > 0)) return 0;
+    return num(capital) * pct(r.silver.fundingPct) * (num(days) / 365);
+  }
+
+  function silverMethodology() {
+    return {
+      id: "silver-etf-mcx",
+      label: "Silver ETF vs MCX: compare ₹/kg. V1 BUY ETF / SELL future is a basis trade, not a locked payoff.",
+    };
+  }
+
   const api = {
     DEFAULT_RATES,
     mergeRates,
@@ -487,6 +662,19 @@
     twoLegPutVerticalCharges,
     estimatePutVerticalMargins,
     putVerticalMethodology,
+    unitsPerKg,
+    etfPerKg,
+    silverHedge,
+    annualizeSimple,
+    annualizeCompound,
+    navPremiumPct,
+    equityDeliveryLeg,
+    commodityFutureLeg,
+    silverSpreadCharges,
+    silverSlippagePerKg,
+    estimateSilverCapital,
+    silverFundingCost,
+    silverMethodology,
     sebiCharge,
     round2,
   };

@@ -32,6 +32,10 @@ function parsePacket(buffer) {
   };
   tick.bid_depth = 0;
   tick.ask_depth = 0;
+  tick.volume = 0;
+  tick.oi = 0;
+  if (len >= 20) tick.volume = u32(view, 16);
+  if (len >= 52) tick.oi = u32(view, 48);
   if (len === 184) {
     const bids = parseDepthSide(view, 64, divisor);
     const asks = parseDepthSide(view, 124, divisor);

@@ -57,6 +57,8 @@ const API = {
   "/api/box-arb": "box-arb",
   "/api/vert-ce": "vert-ce",
   "/api/vert-pe": "vert-pe",
+  "/api/silver-arb": "silver-arb",
+  "/api/option-rv": "option-rv",
   "/api/margins": "margins",
 };
 

@@ -126,21 +126,27 @@ function rowToken(row) {
   return String(row.instrument_token || row["instrument_token"] || "").trim();
 }
 
-let instrumentCache = { day: "", nse: null, nfo: null };
+let instrumentCache = { day: "", nse: null, nfo: null, mcx: null };
 
 async function loadInstruments(accessToken) {
   const day = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
-  if (instrumentCache.day === day && instrumentCache.nse && instrumentCache.nfo) {
+  if (instrumentCache.day === day && instrumentCache.nse && instrumentCache.nfo && instrumentCache.mcx) {
     return instrumentCache;
   }
-  const [nseRes, nfoRes] = await Promise.all([
+  const [nseRes, nfoRes, mcxRes] = await Promise.all([
     kiteGet("/instruments/NSE", accessToken),
     kiteGet("/instruments/NFO", accessToken),
+    kiteGet("/instruments/MCX", accessToken).catch(() => null),
   ]);
+  let mcx = [];
+  if (mcxRes) {
+    mcx = parseCsv(await mcxRes.text());
+  }
   instrumentCache = {
     day,
     nse: parseCsv(await nseRes.text()),
     nfo: parseCsv(await nfoRes.text()),
+    mcx,
   };
   return instrumentCache;
 }
@@ -168,6 +174,10 @@ function parseQuote(q) {
     bid_depth: bidDepth || Number(buy.quantity || 0),
     ask_depth: askDepth || Number(sell.quantity || 0),
     instrument_token: q.instrument_token,
+    volume: Number(q.volume || 0),
+    oi: Number(q.oi || 0),
+    timestamp: q.timestamp || "",
+    last_trade_time: q.last_trade_time || "",
   };
 }
 
@@ -229,7 +239,7 @@ async function quoteMany(accessToken, keys) {
   const chunk = 40;
   for (let i = 0; i < unique.length; i += chunk) {
     const slice = unique.slice(i, i + chunk);
-    const qs = slice.map((key) => `i=${key}`).join("&");
+    const qs = slice.map((key) => `i=${encodeURIComponent(key)}`).join("&");
     try {
       const res = await kiteGet(`/quote?${qs}`, accessToken);
       const json = await res.json();

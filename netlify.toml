@@ -26,6 +26,12 @@
 [functions.vert-pe]
   timeout = 26
 
+[functions.silver-arb]
+  timeout = 26
+
+[functions.option-rv]
+  timeout = 26
+
 [functions.margins]
   timeout = 20
 
@@ -112,6 +118,16 @@
 [[redirects]]
   from = "/api/vert-pe"
   to = "/.netlify/functions/vert-pe"
+  status = 200
+
+[[redirects]]
+  from = "/api/silver-arb"
+  to = "/.netlify/functions/silver-arb"
+  status = 200
+
+[[redirects]]
+  from = "/api/option-rv"
+  to = "/.netlify/functions/option-rv"
   status = 200
 
 [[redirects]]

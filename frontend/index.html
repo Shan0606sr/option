@@ -41,6 +41,8 @@
       <button type="button" class="page-tab" data-tab="boxarb">Box Arbitrage</button>
       <button type="button" class="page-tab" data-tab="vertce">Vertical CE</button>
       <button type="button" class="page-tab" data-tab="vertpe">Vertical PE</button>
+      <button type="button" class="page-tab" data-tab="silver">Silver Arbitrage</button>
+      <button type="button" class="page-tab" data-tab="optrv">Option Intelligence</button>
     </nav>
 
     <section id="panel-index" class="index-panel">
@@ -836,6 +838,248 @@
         Margin marked * is an estimate until Zerodha basket margin returns. Ranked by return on margin, then net profit.
       </p>
     </section>
+
+    <section id="panel-silver" hidden>
+      <div class="index-toolbar">
+        <div>
+          <h2>Silver ETF Arbitrage</h2>
+          <p class="index-sub">SILVERBEES vs every tradable SILVERMIC expiry, compared in ₹/kg. Basis / convergence scanner — not a locked payoff. Identification only.</p>
+        </div>
+      </div>
+      <div id="sil-mode" class="synth-mode synth-mode-ltp" role="status">
+        <strong id="sil-mode-label">LTP / THEORETICAL</strong>
+        <span id="sil-mode-reason">Checking NSE and MCX overlap…</span>
+      </div>
+      <p id="sil-method" class="index-meta">Silver ETF vs MCX: compare ₹/kg.</p>
+      <section class="controls">
+        <label class="control">
+          <span class="label">ETF</span>
+          <select id="sil-etf">
+            <option value="SILVERBEES" selected>SILVERBEES</option>
+          </select>
+        </label>
+        <label class="control">
+          <span class="label">MCX future</span>
+          <select id="sil-fut">
+            <option value="SILVERMIC" selected>SILVERMIC (1 kg)</option>
+          </select>
+        </label>
+        <label class="control">
+          <span class="label">Grams / ETF unit</span>
+          <input id="sil-grams" type="number" min="0.001" step="0.001" value="1" />
+        </label>
+        <label class="control">
+          <span class="label">ETF NAV ₹</span>
+          <input id="sil-nav" type="number" min="0" step="0.01" value="0" />
+        </label>
+        <label class="control">
+          <span class="label">Lots</span>
+          <input id="sil-lots" type="number" min="1" step="1" value="1" />
+        </label>
+        <label class="control">
+          <span class="label">Min net ₹/kg</span>
+          <input id="sil-min-net" type="number" min="0" step="1" value="0" />
+        </label>
+        <fieldset class="strategies">
+          <legend class="label">Directions</legend>
+          <label class="check"><input id="sil-side-a" type="checkbox" checked /> A · buy ETF / sell future</label>
+          <label class="check"><input id="sil-side-b" type="checkbox" checked /> B · buy future / sell ETF</label>
+          <label class="check"><input id="sil-show-no" type="checkbox" /> Show reject / invalid</label>
+        </fieldset>
+        <button id="sil-btn" type="button" class="scan-btn">Start scanner</button>
+      </section>
+      <details class="rates-panel">
+        <summary>Hedge ratio, thresholds, Zerodha equity + MCX costs (configuration — not hard-coded)</summary>
+        <div class="rates-grid">
+          <label class="control"><span class="label">kg / MCX lot</span><input id="sil-kg-lot" type="number" step="0.01" value="1" /></label>
+          <label class="control"><span class="label">Min gross %</span><input id="sil-min-gross" type="number" step="0.1" value="3" /></label>
+          <label class="control"><span class="label">Target %</span><input id="sil-target" type="number" step="0.1" value="5" /></label>
+          <label class="control"><span class="label">Strong %</span><input id="sil-strong" type="number" step="0.1" value="6" /></label>
+          <label class="control"><span class="label">Exceptional %</span><input id="sil-except" type="number" step="0.1" value="8" /></label>
+          <label class="control"><span class="label">Max ETF–NAV %</span><input id="sil-max-nav" type="number" step="0.1" value="2" /></label>
+          <label class="control"><span class="label">Sync window ms</span><input id="sil-sync" type="number" step="100" value="30000" /></label>
+          <label class="control"><span class="label">Funding % / yr</span><input id="sil-fund" type="number" step="0.1" value="0" /></label>
+          <label class="control"><span class="label">Fut margin %</span><input id="sil-margin-pct" type="number" step="0.1" value="6" /></label>
+          <label class="control"><span class="label">MTM buffer %</span><input id="sil-mtm" type="number" step="0.1" value="5" /></label>
+          <label class="control"><span class="label">Slippage ₹/kg</span><input id="sil-slip" type="number" step="1" value="50" /></label>
+          <label class="control"><span class="label">Slippage × spread</span><input id="sil-slip-spread" type="number" step="0.05" value="0.25" /></label>
+          <label class="control"><span class="label">Max ETF spread %</span><input id="sil-etf-spread" type="number" step="0.05" value="1" /></label>
+          <label class="control"><span class="label">Max MCX spread %</span><input id="sil-fut-spread" type="number" step="0.05" value="0.5" /></label>
+          <label class="control"><span class="label">ETF brok %</span><input id="sil-eq-brok" type="number" step="0.001" value="0" /></label>
+          <label class="control"><span class="label">ETF STT %</span><input id="sil-eq-stt" type="number" step="0.01" value="0.1" /></label>
+          <label class="control"><span class="label">ETF txn %</span><input id="sil-eq-txn" type="number" step="0.00001" value="0.00297" /></label>
+          <label class="control"><span class="label">ETF stamp buy %</span><input id="sil-eq-stamp" type="number" step="0.001" value="0.015" /></label>
+          <label class="control"><span class="label">MCX brok %</span><input id="sil-mcx-brok" type="number" step="0.001" value="0.03" /></label>
+          <label class="control"><span class="label">MCX brok cap ₹</span><input id="sil-mcx-cap" type="number" step="1" value="20" /></label>
+          <label class="control"><span class="label">MCX CTT sell %</span><input id="sil-mcx-ctt" type="number" step="0.001" value="0.01" /></label>
+          <label class="control"><span class="label">MCX txn %</span><input id="sil-mcx-txn" type="number" step="0.0001" value="0.0026" /></label>
+          <label class="control"><span class="label">MCX stamp buy %</span><input id="sil-mcx-stamp" type="number" step="0.0001" value="0.002" /></label>
+          <label class="control"><span class="label">GST %</span><input id="sil-gst" type="number" step="0.1" value="18" /></label>
+          <label class="control"><span class="label">SEBI ₹/crore</span><input id="sil-sebi" type="number" step="1" value="10" /></label>
+        </div>
+      </details>
+      <p id="sil-status" class="index-meta">Idle · scanner does not place orders</p>
+      <main class="table-wrap">
+        <table class="results sil-table">
+          <thead>
+            <tr>
+              <th>ETF</th>
+              <th>Futures</th>
+              <th>Expiry</th>
+              <th class="num">ETF ₹/kg</th>
+              <th class="num">Futures ₹/kg</th>
+              <th class="num">Gross %</th>
+              <th class="num">Net %</th>
+              <th class="num">Days</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="sil-body"></tbody>
+        </table>
+        <p id="sil-empty" class="empty">Start the scanner to compare SILVERBEES with every tradable SILVERMIC expiry on a ₹/kg basis.</p>
+      </main>
+      <h3 class="index-sub" style="margin: 18px 8px 8px;">Futures term structure vs ETF</h3>
+      <main class="table-wrap">
+        <table class="results sil-table">
+          <thead>
+            <tr>
+              <th>Expiry</th>
+              <th class="num">Days</th>
+              <th class="num">ETF ₹/kg</th>
+              <th class="num">Futures ₹/kg</th>
+              <th class="num">Spread ₹</th>
+              <th class="num">Spread %</th>
+              <th class="num">Annualized</th>
+            </tr>
+          </thead>
+          <tbody id="sil-term-body"></tbody>
+        </table>
+      </main>
+      <p class="footnote">
+        Primary hedge: <strong>BUY</strong> ETF at ask, <strong>SELL</strong> SILVERMIC at bid.
+        Grams per unit is configurable (SILVERBEES starts at ~1 g, so 1,000 units ≈ 1 kg).
+        Hedge quantities are computed from that ratio and the MCX lot size — not hard-coded.
+        After the NSE ETF close, live MCX is never treated as a simultaneous executable hedge.
+        Status is a basis-trade classification, never “guaranteed” or “risk-free”.
+        Historical convergence charts are not in V1.
+      </p>
+    </section>
+
+    <section id="panel-orv" hidden>
+      <div class="index-toolbar">
+        <div>
+          <h2>Option Intelligence</h2>
+          <p class="index-sub">Black-76 IV vs the same-expiry Call curve and Put curve. Cheap / expensive is relative value — not locked arbitrage.</p>
+        </div>
+      </div>
+      <div id="orv-mode" class="synth-mode synth-mode-ltp" role="status">
+        <strong id="orv-mode-label">LTP / THEORETICAL</strong>
+        <span id="orv-mode-reason">Checking NSE session…</span>
+      </div>
+      <p id="orv-method" class="index-meta">Option relative value: Black-76 IV vs own Call/Put curve.</p>
+      <section class="controls">
+        <label class="control">
+          <span class="label">Expiry</span>
+          <select id="orv-expiry">
+            <option value="nearest" selected>Nearest</option>
+            <option value="next">Next</option>
+          </select>
+        </label>
+        <label class="control plan1-filter">
+          <span class="label">Underlying</span>
+          <select id="orv-stock" class="stock-select">
+            <option value="">All F&amp;O + indexes</option>
+          </select>
+        </label>
+        <label class="control">
+          <span class="label">Strike band %</span>
+          <input id="orv-band" type="number" min="0" step="0.5" value="8" />
+        </label>
+        <label class="control">
+          <span class="label">Max strikes</span>
+          <input id="orv-max-strikes" type="number" min="0" step="1" value="7" />
+        </label>
+        <label class="control">
+          <span class="label">Find</span>
+          <input id="orv-filter" type="text" placeholder="NIFTY" />
+        </label>
+        <label class="control">
+          <span class="label">Min |residual|</span>
+          <input id="orv-min-res" type="number" min="0" step="0.1" value="0" />
+        </label>
+        <label class="control">
+          <span class="label">Min |₹ mis|</span>
+          <input id="orv-min-mis" type="number" min="0" step="0.05" value="0" />
+        </label>
+        <label class="control">
+          <span class="label">Min RV score</span>
+          <input id="orv-min-score" type="number" min="0" step="1" value="0" />
+        </label>
+        <fieldset class="strategies">
+          <legend class="label">Signals</legend>
+          <label class="check"><input id="orv-ce-cheap" type="checkbox" checked /> Cheap CE</label>
+          <label class="check"><input id="orv-ce-exp" type="checkbox" checked /> Expensive CE</label>
+          <label class="check"><input id="orv-pe-cheap" type="checkbox" checked /> Cheap PE</label>
+          <label class="check"><input id="orv-pe-exp" type="checkbox" checked /> Expensive PE</label>
+          <label class="check"><input id="orv-show-normal" type="checkbox" /> Show normal / no IV</label>
+        </fieldset>
+        <button id="orv-btn" type="button" class="scan-btn">Start scanner</button>
+      </section>
+      <details class="rates-panel">
+        <summary>IV curve, residual and Z-score thresholds (scanner configuration — not trading rules)</summary>
+        <div class="rates-grid">
+          <label class="control"><span class="label">Rate r</span><input id="orv-rate" type="number" step="0.01" value="0" /></label>
+          <label class="control"><span class="label">Max opt spread %</span><input id="orv-opt-spread" type="number" step="0.1" value="12" /></label>
+          <label class="control"><span class="label">Cheap residual vol pts</span><input id="orv-cheap-res" type="number" step="0.1" value="2" /></label>
+          <label class="control"><span class="label">Extreme residual</span><input id="orv-ext-res" type="number" step="0.1" value="3.5" /></label>
+          <label class="control"><span class="label">Cheap Z</span><input id="orv-cheap-z" type="number" step="0.1" value="-2" /></label>
+          <label class="control"><span class="label">Extreme cheap Z</span><input id="orv-ext-cheap-z" type="number" step="0.1" value="-3" /></label>
+          <label class="control"><span class="label">Expensive Z</span><input id="orv-exp-z" type="number" step="0.1" value="2" /></label>
+          <label class="control"><span class="label">Extreme expensive Z</span><input id="orv-ext-exp-z" type="number" step="0.1" value="3" /></label>
+          <label class="control"><span class="label">Min Z history</span><input id="orv-min-hist" type="number" step="1" value="20" /></label>
+          <label class="control"><span class="label">Min fit points</span><input id="orv-min-fit" type="number" step="1" value="4" /></label>
+          <label class="control"><span class="label">Stale quote ms</span><input id="orv-stale" type="number" step="100" value="2500" /></label>
+        </div>
+      </details>
+      <p id="orv-status" class="index-meta">Idle · scanner does not place orders</p>
+      <main class="table-wrap">
+        <table class="results orv-table">
+          <thead>
+            <tr>
+              <th>Stock</th>
+              <th>Expiry</th>
+              <th>Type</th>
+              <th class="num">Strike</th>
+              <th class="num">Spot</th>
+              <th class="num">Future</th>
+              <th class="num">Market</th>
+              <th class="num">Bid</th>
+              <th class="num">Ask</th>
+              <th class="num">IV</th>
+              <th class="num">Exp IV</th>
+              <th class="num">Residual</th>
+              <th class="num">Z</th>
+              <th class="num">Fair ₹</th>
+              <th class="num">Mis ₹</th>
+              <th class="num">Mis %</th>
+              <th class="num">Spread</th>
+              <th>Liq</th>
+              <th class="num">RV</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="orv-body"></tbody>
+        </table>
+        <p id="orv-empty" class="empty">Start the scanner to invert Black-76 IV and score each option against its own Call or Put curve.</p>
+      </main>
+      <p class="footnote">
+        Market price → Black-76 IV → fitted IV → residual → Z (only with history) → fair ₹ → mispricing.
+        Call IVs are fitted separately from Put IVs. Executable cheap uses the <strong>ask</strong>; executable expensive uses the <strong>bid</strong>.
+        After hours the book is LTP / theoretical. A 3σ-cheap print is a
+        <strong>relative-value opportunity</strong>, not synthetic / box / vertical arbitrage.
+        Z-score is blank until enough stored residuals exist — it is never invented from one snapshot.
+      </p>
+    </section>
   </div>
 
   <aside id="drawer" class="drawer" hidden>
@@ -861,6 +1105,9 @@
   <script src="box-arb.js"></script>
   <script src="vert-ce.js"></script>
   <script src="vert-pe.js"></script>
+  <script src="silver-arb.js"></script>
+  <script src="option-rv-engine.js"></script>
+  <script src="option-rv.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

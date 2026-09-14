@@ -1,0 +1,63 @@
+const { readAccessCookie, marketOpen, quoteMany } = require("./lib/kite");
+const { optionRvUniverse, applySeedBooks } = require("./lib/option-rv");
+const { nseSession } = require("./lib/nse-session");
+
+function json(statusCode, body) {
+  return {
+    statusCode,
+    headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+    body: JSON.stringify(body),
+  };
+}
+
+exports.handler = async (event) => {
+  const access = readAccessCookie(event.headers.cookie || event.headers.Cookie || "");
+  if (!access) {
+    return json(401, { connected: false, error: "Connect Zerodha first.", pairs: [], stocks: [] });
+  }
+
+  const params = event.queryStringParameters || {};
+  try {
+    const snapshot = await optionRvUniverse(access, {
+      expiry: params.expiry || "nearest",
+      symbol: params.symbol || "",
+      bandPct: Number(params.band || 8),
+      maxStrikes: params.max_strikes === "" ? 0 : Number(params.max_strikes || 7),
+      seed: params.seed !== "false",
+    });
+
+    const keys = String(params.keys || "")
+      .split(",")
+      .map((key) => key.trim())
+      .filter(Boolean)
+      .slice(0, 80);
+    let extraBooks = {};
+    let extraError = "";
+    if (keys.length) {
+      const quoted = await quoteMany(access, keys);
+      extraBooks = applySeedBooks(
+        snapshot.pairs.filter((row) => keys.includes(row.ce_key) || keys.includes(row.pe_key) || keys.includes(row.fut_key) || keys.includes(row.eq_key)),
+        quoted.books || {},
+      );
+      extraError = quoted.error || "";
+    }
+
+    const session = nseSession();
+    const now = new Date().toLocaleTimeString("en-IN", { hour12: false, timeZone: "Asia/Kolkata" });
+    return json(200, {
+      connected: true,
+      market_open: marketOpen(),
+      session_live: session.live,
+      session_reason: session.reason,
+      last_update: now,
+      message: snapshot.pairs.length
+        ? `Option intelligence: ${snapshot.stocks_scanned} underlyings, ${snapshot.pair_count} strikes.`
+        : (snapshot.price_error || "No matching option chains."),
+      ...snapshot,
+      books: { ...snapshot.books, ...extraBooks },
+      price_error: snapshot.price_error || extraError,
+    });
+  } catch (error) {
+    return json(500, { connected: true, error: error.message, pairs: [], stocks: [] });
+  }
+};
